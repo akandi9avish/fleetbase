@@ -1,0 +1,29 @@
+# Simplified Railway Dockerfile for Fleetbase API
+# Uses official Fleetbase base image with FrankenPHP/Octane
+
+FROM fleetbase/fleetbase-api:latest
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Switch to root for any setup operations
+USER root
+
+# Ensure proper permissions
+RUN chown -R www-data:www-data /fleetbase/api/storage \
+    && chmod -R 775 /fleetbase/api/storage \
+    && chown -R www-data:www-data /fleetbase/api/bootstrap/cache \
+    && chmod -R 775 /fleetbase/api/bootstrap/cache
+
+# Switch back to www-data for security
+USER www-data
+
+# Expose Octane port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/ || exit 1
+
+# Start Octane with FrankenPHP
+CMD ["php", "artisan", "octane:frankenphp", "--max-requests=250", "--port=8000", "--host=0.0.0.0"]
