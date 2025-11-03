@@ -99,18 +99,37 @@ return new class extends Migration {
             }
         }
 
-        // Step 3: Add indexes on registry_extensions columns if missing
-        if (Schema::hasTable('registry_extensions')) {
-            Schema::table('registry_extensions', function (Blueprint $table) {
-                // Check for uuid index
-                $uuidIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid'");
-                if (empty($uuidIndexes)) {
-                    try {
-                        $table->index('uuid');
-                    } catch (\Exception $e) {
-                        // Index might already exist
+        // Step 3: Add UNIQUE index on registry_extensions.uuid (so other tables can reference it)
+        if (Schema::hasTable('registry_extensions') && Schema::hasColumn('registry_extensions', 'uuid')) {
+            $uniqueIndexName = 'registry_extensions_uuid_unique';
+            $indexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Key_name = ? AND Non_unique = 0", [$uniqueIndexName]);
+
+            if (empty($indexes)) {
+                // Drop any existing non-unique indexes on uuid
+                $regularIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY'");
+
+                foreach ($regularIndexes as $index) {
+                    if ($index->Non_unique == 1) {
+                        try {
+                            DB::statement("DROP INDEX {$index->Key_name} ON registry_extensions");
+                        } catch (\Exception $e) {
+                            // Already dropped, continue
+                        }
                     }
                 }
+
+                // Add unique index to registry_extensions.uuid
+                try {
+                    DB::statement("ALTER TABLE registry_extensions ADD UNIQUE INDEX {$uniqueIndexName} (uuid)");
+                } catch (\Exception $e) {
+                    // Index might already exist
+                }
+            }
+        }
+
+        // Step 4: Add indexes on registry_extensions columns if missing
+        if (Schema::hasTable('registry_extensions')) {
+            Schema::table('registry_extensions', function (Blueprint $table) {
 
                 // Check for public_id index
                 $publicIdIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'public_id'");
@@ -124,7 +143,7 @@ return new class extends Migration {
             });
         }
 
-        // Step 4: Add foreign keys if they don't exist
+        // Step 5: Add foreign keys if they don't exist
         if (Schema::hasTable('registry_extensions')) {
             // Check and add company_uuid FK
             $companyFkExists = DB::select(
