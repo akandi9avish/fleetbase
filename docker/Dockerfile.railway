@@ -129,6 +129,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090455_create_chat_ch
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090456_create_chat_participants_table.php /tmp/migration-patch-chat-participants.php
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_messages_table.php /tmp/migration-patch-chat-messages.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_07_054635_create_custom_field_values_table.php /tmp/migration-patch-custom-field-values.php
+COPY --chown=www-data:www-data ./docker/patches/2024_11_02_000000_add_missing_unique_indexes.php /tmp/migration-add-unique-indexes.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -275,6 +276,18 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_03_
         find /fleetbase/api/vendor/fleetbase -name "*custom_field_values*" 2>/dev/null || true; \
         exit 1; \
     fi
+
+# CRITICAL FIX #10: Add NEW migration to fix missing unique indexes
+# This migration runs AFTER all existing migrations and adds unique indexes to uuid columns
+# that are referenced by foreign keys. Unlike the patches above (which modify existing migrations),
+# this ADDS a new migration file that Laravel hasn't seen before, so it will definitely run.
+RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
+    MIGRATION_FILE="$MIGRATION_DIR/2024_11_02_000000_add_missing_unique_indexes.php" && \
+    echo "🔧 Adding new migration to fix missing unique indexes..." && \
+    cp /tmp/migration-add-unique-indexes.php "$MIGRATION_FILE" && \
+    rm /tmp/migration-add-unique-indexes.php && \
+    chown www-data:www-data "$MIGRATION_FILE" && \
+    echo "✅ Migration to add unique indexes created successfully at: $MIGRATION_FILE"
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer
