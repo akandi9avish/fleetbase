@@ -70,7 +70,58 @@ return new class extends Migration {
             });
         }
 
-        // Step 3: Add foreign key for company_uuid if it doesn't exist
+        // Step 3: CRITICAL - Ensure permissions.id has a PRIMARY KEY or UNIQUE constraint
+        // The permissions table was created with id->index() in original migration
+        // We need it to be PRIMARY or UNIQUE for FK to work
+        if (Schema::hasTable('permissions') && Schema::hasColumn('permissions', 'id')) {
+            echo "🔍 Checking permissions.id for PRIMARY/UNIQUE constraint...\n";
+
+            // Check if id column has PRIMARY KEY or UNIQUE constraint
+            $idConstraints = DB::select("
+                SELECT CONSTRAINT_NAME, CONSTRAINT_TYPE
+                FROM information_schema.TABLE_CONSTRAINTS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'permissions'
+                AND CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE')
+                AND CONSTRAINT_NAME IN (
+                    SELECT CONSTRAINT_NAME
+                    FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'permissions'
+                    AND COLUMN_NAME = 'id'
+                )
+            ");
+
+            if (empty($idConstraints)) {
+                echo "⚠️  permissions.id does NOT have PRIMARY/UNIQUE constraint - fixing now...\n";
+
+                // Drop any existing non-unique indexes on id column
+                $existingIndexes = DB::select("SHOW INDEX FROM permissions WHERE Column_name = 'id' AND Key_name != 'PRIMARY'");
+                foreach ($existingIndexes as $index) {
+                    if ($index->Non_unique == 1) {
+                        try {
+                            DB::statement("DROP INDEX {$index->Key_name} ON permissions");
+                            echo "Dropped non-unique index {$index->Key_name} from permissions.id\n";
+                        } catch (\Exception $e) {
+                            echo "Warning: Could not drop index: {$e->getMessage()}\n";
+                        }
+                    }
+                }
+
+                // Add UNIQUE constraint to permissions.id
+                try {
+                    DB::statement("ALTER TABLE permissions ADD UNIQUE INDEX permissions_id_unique (id)");
+                    echo "✅ Added UNIQUE constraint to permissions.id\n";
+                } catch (\Exception $e) {
+                    echo "⚠️  CRITICAL: Could not add UNIQUE to permissions.id: {$e->getMessage()}\n";
+                    throw $e;
+                }
+            } else {
+                echo "✅ permissions.id already has PRIMARY/UNIQUE constraint\n";
+            }
+        }
+
+        // Step 4: Add foreign key for company_uuid if it doesn't exist
         $companyFkExists = DB::select(
             "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'directives'
@@ -87,7 +138,7 @@ return new class extends Migration {
             });
         }
 
-        // Step 4: Add foreign key for permission_uuid if it doesn't exist
+        // Step 5: Add foreign key for permission_uuid if it doesn't exist
         // The permissions table uses 'id' as the primary key (which is a UUID)
         $permissionFkExists = DB::select(
             "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
