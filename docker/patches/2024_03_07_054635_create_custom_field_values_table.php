@@ -73,7 +73,37 @@ return new class extends Migration {
             });
         }
 
-        // Step 4: Add foreign key for company_uuid if it doesn't exist
+        // Step 4: CRITICAL - Ensure custom_fields.uuid has unique index BEFORE adding FK
+        // The foreign key from custom_field_values references custom_fields.uuid
+        // MySQL requires the referenced column to have a unique index
+        if (Schema::hasTable('custom_fields') && Schema::hasColumn('custom_fields', 'uuid')) {
+            $uniqueIndexName = 'custom_fields_uuid_unique';
+            $indexes = DB::select("SHOW INDEX FROM custom_fields WHERE Key_name = ? AND Non_unique = 0", [$uniqueIndexName]);
+
+            if (empty($indexes)) {
+                // Drop any existing non-unique indexes on uuid
+                $regularIndexes = DB::select("SHOW INDEX FROM custom_fields WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY'");
+
+                foreach ($regularIndexes as $index) {
+                    if ($index->Non_unique == 1) {
+                        try {
+                            DB::statement("DROP INDEX {$index->Key_name} ON custom_fields");
+                        } catch (\Exception $e) {
+                            // Already dropped, continue
+                        }
+                    }
+                }
+
+                // Add unique index to custom_fields.uuid
+                try {
+                    DB::statement("ALTER TABLE custom_fields ADD UNIQUE INDEX {$uniqueIndexName} (uuid)");
+                } catch (\Exception $e) {
+                    // Index might already exist
+                }
+            }
+        }
+
+        // Step 5: Add foreign key for company_uuid if it doesn't exist
         $companyFkExists = DB::select(
             "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'custom_field_values'
@@ -90,7 +120,7 @@ return new class extends Migration {
             });
         }
 
-        // Step 5: Add foreign key for custom_field_uuid if it doesn't exist
+        // Step 6: Add foreign key for custom_field_uuid if it doesn't exist
         $customFieldFkExists = DB::select(
             "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'custom_field_values'
