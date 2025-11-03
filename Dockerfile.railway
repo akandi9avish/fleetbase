@@ -123,6 +123,7 @@ COPY --chown=www-data:www-data ./api /fleetbase/api
 COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch-permissions.php
 COPY --chown=www-data:www-data ./docker/patches/2023_10_25_093014_create_vehicle_device_events_table.php /tmp/migration-patch-vehicle-device-events.php
 COPY --chown=www-data:www-data ./docker/patches/2024_01_24_072725_add_foreign_keys_to_dashboard_widgets_table.php /tmp/migration-patch-dashboard-widgets.php
+COPY --chown=www-data:www-data ./docker/patches/2024_01_31_063635_create_comments_table.php /tmp/migration-patch-comments.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -171,6 +172,22 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_01_
         echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
         echo "📂 Searching for migration file..." && \
         find /fleetbase/api/vendor/fleetbase -name "*dashboard_widgets*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #4: Patch comments table migration to be idempotent with unique index for self-referential FK
+# This prevents "Missing unique key" errors for self-referential parent_comment_uuid foreign key
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_01_31_063635_create_comments_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent comments table migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-comments.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-comments.php && \
+        echo "✅ Comments table migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*comments*" 2>/dev/null || true; \
         exit 1; \
     fi
 
