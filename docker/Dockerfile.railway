@@ -134,6 +134,8 @@ COPY --chown=www-data:www-data ./docker/patches/2024_03_07_075508_add_order_conf
 COPY --chown=www-data:www-data ./docker/patches/2024_03_21_051614_create_registry_extensions_table.php /tmp/migration-patch-registry-extensions.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_25_044537_create_registry_extension_bundles_table.php /tmp/migration-patch-registry-extension-bundles.php
 COPY --chown=www-data:www-data ./docker/patches/2024_08_27_090558_create_directives_table.php /tmp/migration-patch-directives.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054921_create_telematics_table.php /tmp/migration-patch-telematics.php
+COPY --chown=www-data:www-data ./docker/patches/2025_11_03_000000_universal_uuid_unique_index_fix.php /tmp/migration-universal-uuid-fix.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -353,6 +355,31 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_08_
         find /fleetbase/api/vendor/fleetbase -name "*directives*" 2>/dev/null || true; \
         exit 1; \
     fi
+
+# CRITICAL FIX #15: Patch telematics table migration to be idempotent
+# This prevents FK constraint failures with warranties.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2025_08_28_054921_create_telematics_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent telematics migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-telematics.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-telematics.php && \
+        echo "✅ Telematics migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "Migration might not exist yet - skipping"; \
+    fi
+
+# CRITICAL FIX #16: Add UNIVERSAL UUID UNIQUE INDEX FIX migration
+# This scans the entire database and ensures ALL uuid columns referenced by FKs have UNIQUE constraints
+# This prevents ALL future "Missing unique key for constraint" errors
+RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
+    MIGRATION_FILE="$MIGRATION_DIR/2025_11_03_000000_universal_uuid_unique_index_fix.php" && \
+    echo "🔧 Adding UNIVERSAL UUID UNIQUE INDEX FIX migration..." && \
+    cp /tmp/migration-universal-uuid-fix.php "$MIGRATION_FILE" && \
+    rm /tmp/migration-universal-uuid-fix.php && \
+    chown www-data:www-data "$MIGRATION_FILE" && \
+    echo "✅ Universal UUID fix migration created successfully at: $MIGRATION_FILE"
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer
