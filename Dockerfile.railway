@@ -143,12 +143,19 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_
 
 # CRITICAL FIX #2: Add vehicle_devices UUID index pre-migration
 # This prevents foreign key constraint errors in vehicle_device_events table
+# IMPORTANT: Must be placed in vendor directory to run BEFORE vehicle_device_events migration
 RUN echo "🔧 Adding vehicle_devices UUID index pre-migration..." && \
-    mkdir -p /fleetbase/api/database/migrations && \
-    cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
-    chown www-data:www-data "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
-    rm /tmp/migration-patch-vehicle-devices.php && \
-    echo "✅ Vehicle devices index pre-migration added successfully"
+    VENDOR_MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/fleetops-api/migrations" && \
+    if [ -d "$VENDOR_MIGRATION_DIR" ]; then \
+        cp /tmp/migration-patch-vehicle-devices.php "$VENDOR_MIGRATION_DIR/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+        chown www-data:www-data "$VENDOR_MIGRATION_DIR/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+        echo "✅ Vehicle devices index pre-migration added to vendor directory"; \
+    else \
+        echo "⚠️  Vendor migration directory not found, searching..." && \
+        find /fleetbase/api/vendor/fleetbase -type d -name "migrations" 2>/dev/null && \
+        exit 1; \
+    fi && \
+    rm /tmp/migration-patch-vehicle-devices.php
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer
