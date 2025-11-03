@@ -119,8 +119,26 @@ RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoload
 # Setup application
 COPY --chown=www-data:www-data ./api /fleetbase/api
 
+# Copy migration patch
+COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch.php
+
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
+
+# CRITICAL FIX: Apply idempotent migration patch
+# This prevents "Table already exists" errors on container restarts
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_25_094304_create_permissions_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent permissions migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch.php && \
+        echo "✅ Migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase -name "2023_04_25_094304_create_permissions_table.php" 2>/dev/null || true; \
+    fi
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer

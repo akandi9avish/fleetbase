@@ -77,6 +77,18 @@ This document lists all modifications made to the original Fleetbase codebase to
 
 ---
 
+## 📁 Files Added (Continued)
+
+### 10. **docker/patches/2023_04_25_094304_create_permissions_table.php**
+- **Purpose**: Idempotent version of permissions migration
+- **Key Changes**:
+  - Adds `Schema::hasTable()` checks before each `Schema::create()`
+  - Prevents "Table already exists" errors on container restarts
+  - Ensures migration can safely run multiple times
+- **Applied**: During Docker build, replaces vendor migration file
+
+---
+
 ## 📝 Files Modified
 
 ### 1. **api/composer.json**
@@ -105,7 +117,51 @@ This document lists all modifications made to the original Fleetbase codebase to
 
 ## 🔧 Key Technical Changes
 
-### 1. **AWS SSM Removal**
+### 1. **Idempotent Migration Patch (CRITICAL FIX)**
+
+**Problem Solved**:
+- Container crashes after migrations partially complete
+- Railway restarts container
+- Laravel tries to re-run incomplete migrations
+- ERROR: "Table 'permissions' already exists"
+
+**Solution**:
+```dockerfile
+# Dockerfile.railway lines 128-141
+COPY ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch.php
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_25_094304_create_permissions_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch.php "$MIGRATION_FILE" && \
+        echo "✅ Migration patched successfully"; \
+    fi
+```
+
+**How It Works**:
+- During Docker build, replaces vendor migration with patched version
+- Patched version checks `if (!Schema::hasTable(...))` before creating each table
+- Migration can now safely run multiple times (idempotent)
+- Prevents errors from incomplete migration runs
+
+**Before Patch**:
+```php
+Schema::create($tableNames['permissions'], function (Blueprint $table) {
+    // Table creation code
+});
+```
+
+**After Patch**:
+```php
+if (!Schema::hasTable($tableNames['permissions'])) {
+    Schema::create($tableNames['permissions'], function (Blueprint $table) {
+        // Table creation code
+    });
+}
+```
+
+---
+
+### 2. **AWS SSM Removal**
 
 **Original Behavior**:
 ```dockerfile
