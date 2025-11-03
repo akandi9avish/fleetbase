@@ -130,6 +130,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090456_create_chat_pa
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_messages_table.php /tmp/migration-patch-chat-messages.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_07_054635_create_custom_field_values_table.php /tmp/migration-patch-custom-field-values.php
 COPY --chown=www-data:www-data ./docker/patches/2024_11_02_000000_add_missing_unique_indexes.php /tmp/migration-add-unique-indexes.php
+COPY --chown=www-data:www-data ./docker/patches/2024_03_07_075508_add_order_config_uuid_column_to_orders_table.php /tmp/migration-patch-order-config-uuid.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -288,6 +289,21 @@ RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
     rm /tmp/migration-add-unique-indexes.php && \
     chown www-data:www-data "$MIGRATION_FILE" && \
     echo "✅ Migration to add unique indexes created successfully at: $MIGRATION_FILE"
+
+# CRITICAL FIX #11: Patch add_order_config_uuid_column_to_orders_table migration
+# This migration tries to add FK to order_configs.uuid which doesn't have unique index
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2024_03_07_075508_add_order_config_uuid_column_to_orders_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent order_config_uuid migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-order-config-uuid.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-order-config-uuid.php && \
+        echo "✅ Order config UUID migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        find /fleetbase/api/vendor/fleetbase -name "*order_config_uuid*" 2>/dev/null || true; \
+        exit 1; \
+    fi
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer
