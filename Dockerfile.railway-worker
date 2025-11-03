@@ -1,0 +1,20 @@
+# Railway-compatible Dockerfile for Fleetbase Queue Worker
+# Processes background jobs from Redis queue
+
+FROM fleetbase/fleetbase-api:latest
+
+# Switch to www-data user for security
+USER www-data
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Health check to verify queue worker is responsive
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD php artisan queue:status || exit 1
+
+# Run queue worker with recommended production settings
+# --verbose: Output detailed information
+# --tries=3: Retry failed jobs up to 3 times
+# --timeout=300: Maximum execution time per job (5 minutes)
+CMD ["php", "artisan", "queue:work", "--verbose", "--tries=3", "--timeout=300"]

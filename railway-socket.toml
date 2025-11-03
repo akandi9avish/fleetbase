@@ -1,0 +1,19 @@
+# Railway Configuration for Fleetbase SocketCluster
+# WebSocket server for real-time communications
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway-socket"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+startCommand = ""
+
+# Environment Variables
+# Note: Railway automatically provides PORT variable
+# Optional:
+# - SOCKETCLUSTER_WORKERS=10
+# - SOCKETCLUSTER_BROKERS=10

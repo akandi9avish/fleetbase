@@ -2,6 +2,7 @@ import Route from '@ember/routing/route';
 import { tracked } from '@glimmer/tracking';
 import { inject as service } from '@ember/service';
 import { action } from '@ember/object';
+import config from '../config/environment';
 import isElectron from '@fleetbase/ember-core/utils/is-electron';
 import pathToRoute from '@fleetbase/ember-core/utils/path-to-route';
 import removeBootLoader from '../utils/remove-boot-loader';
@@ -57,6 +58,10 @@ export default class ApplicationRoute extends Route {
     // eslint-disable-next-line ember/classic-decorator-hooks
     async init() {
         super.init(...arguments);
+
+        // REEUP Integration: Setup credential auto-fill authentication
+        this.setupREEUPAuthListener();
+
         const { shouldInstall, shouldOnboard, defaultTheme } = await this.checkInstallationStatus();
 
         this.defaultTheme = defaultTheme;
@@ -67,6 +72,76 @@ export default class ApplicationRoute extends Route {
 
         if (shouldOnboard) {
             return this.router.transitionTo('onboard');
+        }
+    }
+
+    /**
+     * Setup REEUP postMessage authentication listener for credential auto-fill.
+     * Receives credentials from parent REEUP window and auto-fills the Fleetbase login form.
+     *
+     * @memberof ApplicationRoute
+     */
+    setupREEUPAuthListener() {
+        if (typeof window === 'undefined') return;
+
+        console.log('[REEUP] Setting up credential auto-fill listener');
+
+        window.addEventListener('message', async (event) => {
+            // Security: Only accept messages from configured REEUP origins
+            const allowedOrigins = config.reeup?.allowedOrigins || ['http://localhost:3000'];
+
+            if (!allowedOrigins.includes(event.origin)) {
+                return;
+            }
+
+            // Handle credential auto-fill
+            if (event.data.type === 'REEUP_FLEETBASE_CREDENTIALS') {
+                const { email, password } = event.data;
+                console.log('[REEUP] Received credentials for auto-fill:', email);
+
+                // Auto-fill login form with retry logic
+                const fillLoginForm = () => {
+                    const emailField = document.querySelector('input[name="email"], input[type="email"]');
+                    const passwordField = document.querySelector('input[name="password"], input[type="password"]');
+
+                    if (emailField && passwordField && email && password) {
+                        console.log('[REEUP] Filling login form');
+
+                        // Fill fields
+                        emailField.value = email;
+                        passwordField.value = password;
+
+                        // Trigger Ember events
+                        emailField.dispatchEvent(new Event('input', { bubbles: true }));
+                        emailField.dispatchEvent(new Event('change', { bubbles: true }));
+                        passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+                        passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                        // Submit after brief delay
+                        setTimeout(() => {
+                            const form = emailField.closest('form');
+                            if (form) {
+                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                console.log('[REEUP] Form submitted');
+                            }
+                        }, 200);
+                    } else {
+                        // Retry if form not ready
+                        setTimeout(fillLoginForm, 100);
+                    }
+                };
+
+                fillLoginForm();
+            }
+        });
+
+        // Signal ready to parent window
+        if (window.parent !== window) {
+            const allowedOrigins = config.reeup?.allowedOrigins || ['http://localhost:3000'];
+            allowedOrigins.forEach(origin => {
+                window.parent.postMessage({ type: 'REEUP_FLEETBASE_READY' }, origin);
+            });
+            console.log('[REEUP] Sent READY signal to parent');
         }
     }
 

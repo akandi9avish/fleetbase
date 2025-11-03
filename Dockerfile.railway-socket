@@ -1,0 +1,20 @@
+# Railway-compatible Dockerfile for Fleetbase SocketCluster
+# WebSocket server for real-time communications
+
+FROM socketcluster/socketcluster:v17.4.0
+
+# Environment variables for SocketCluster configuration
+# Railway will provide PORT automatically, but we can default to 8000
+ENV SOCKETCLUSTER_PORT=${PORT:-8000}
+ENV SOCKETCLUSTER_WORKERS=10
+ENV SOCKETCLUSTER_BROKERS=10
+
+# Expose the WebSocket port
+EXPOSE ${SOCKETCLUSTER_PORT}
+
+# Health check to verify WebSocket server is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${SOCKETCLUSTER_PORT}/health || wget -q --spider http://localhost:${SOCKETCLUSTER_PORT}/health || exit 1
+
+# Start SocketCluster server
+CMD ["node", "server.js"]

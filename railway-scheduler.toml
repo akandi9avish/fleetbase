@@ -1,0 +1,17 @@
+# Railway Configuration for Fleetbase Scheduler
+# Runs Laravel scheduled tasks via cron
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway-scheduler"
+
+[deploy]
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 10
+startCommand = ""
+
+# Environment Variables
+# Note: Set these in Railway dashboard or via CLI
+# Required:
+# - DATABASE_URL (from MySQL plugin)
+# - REDIS_URL (from Redis plugin)

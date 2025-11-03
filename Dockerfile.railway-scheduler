@@ -1,0 +1,22 @@
+# Railway-compatible Dockerfile for Fleetbase Scheduler
+# Runs Laravel scheduled tasks via cron using go-crond
+
+FROM fleetbase/fleetbase-api:latest
+
+# Switch to www-data user for security
+USER www-data
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Verify crontab file exists
+RUN test -f ./crontab || (echo "ERROR: crontab file not found!" && exit 1)
+
+# Health check - verify go-crond process is running
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD pgrep go-crond > /dev/null || exit 1
+
+# Run go-crond scheduler
+# --verbose: Output detailed logging for debugging
+# root:./crontab: Run as root user with the crontab file
+CMD ["go-crond", "--verbose", "root:./crontab"]

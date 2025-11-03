@@ -1,0 +1,21 @@
+# Railway Configuration for Fleetbase Main Service
+# This service combines the Fleetbase API + nginx proxy
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway-main"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/"
+healthcheckTimeout = 300
+startCommand = ""
+
+# Environment Variables
+# Note: Set these in Railway dashboard or via CLI
+# Required:
+# - DATABASE_URL (from MySQL plugin)
+# - REDIS_URL (from Redis plugin)
+# - APP_URL (Railway public domain)
+# - SESSION_DOMAIN (Railway domain without https://)
