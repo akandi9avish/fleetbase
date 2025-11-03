@@ -124,6 +124,10 @@ COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permiss
 COPY --chown=www-data:www-data ./docker/patches/2023_10_25_093014_create_vehicle_device_events_table.php /tmp/migration-patch-vehicle-device-events.php
 COPY --chown=www-data:www-data ./docker/patches/2024_01_24_072725_add_foreign_keys_to_dashboard_widgets_table.php /tmp/migration-patch-dashboard-widgets.php
 COPY --chown=www-data:www-data ./docker/patches/2024_01_31_063635_create_comments_table.php /tmp/migration-patch-comments.php
+COPY --chown=www-data:www-data ./docker/patches/2024_02_04_051200_create_custom_fields_table.php /tmp/migration-patch-custom-fields.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090455_create_chat_channels_table.php /tmp/migration-patch-chat-channels.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090456_create_chat_participants_table.php /tmp/migration-patch-chat-participants.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_messages_table.php /tmp/migration-patch-chat-messages.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -188,6 +192,70 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_01_
         echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
         echo "📂 Searching for migration file..." && \
         find /fleetbase/api/vendor/fleetbase -name "*comments*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #5: Patch custom_fields table migration to add unique index on uuid
+# custom_field_values references custom_fields.uuid, which only has regular index
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_02_04_051200_create_custom_fields_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent custom_fields migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-custom-fields.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-custom-fields.php && \
+        echo "✅ Custom fields migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*custom_fields*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #6: Patch chat_channels table migration to add unique index on uuid
+# chat_participants, chat_messages, and chat_attachments all reference chat_channels.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090455_create_chat_channels_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_channels migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-channels.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-channels.php && \
+        echo "✅ Chat channels migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_channels*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #7: Patch chat_participants table migration to add unique index on uuid
+# chat_messages, chat_attachments, and chat_receipts all reference chat_participants.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090456_create_chat_participants_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_participants migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-participants.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-participants.php && \
+        echo "✅ Chat participants migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_participants*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #8: Patch chat_messages table migration to add unique index on uuid
+# chat_attachments and chat_receipts reference chat_messages.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090458_create_chat_messages_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_messages migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-messages.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-messages.php && \
+        echo "✅ Chat messages migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_messages*" 2>/dev/null || true; \
         exit 1; \
     fi
 
