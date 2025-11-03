@@ -1,0 +1,102 @@
+# .dockerignore.railway
+# Railway-optimized Docker ignore file
+# Excludes unnecessary files to speed up builds and reduce image size
+
+# Git and version control
+.git
+.github
+.gitignore
+.gitmodules
+.gitattributes
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+auth.json
+
+# Development files
+*.md
+!README.md
+*.log
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Node modules and build artifacts
+node_modules
+npm-debug.log
+yarn-error.log
+.npm
+.yarn
+console/node_modules
+console/dist
+console/tmp
+packages/*/node_modules
+packages/*/dist
+
+# Composer
+vendor
+api/vendor
+.composer
+
+# Laravel specific
+storage/logs/*
+!storage/logs/.gitkeep
+storage/framework/cache/*
+!storage/framework/cache/.gitkeep
+storage/framework/sessions/*
+!storage/framework/sessions/.gitkeep
+storage/framework/views/*
+!storage/framework/views/.gitkeep
+storage/framework/testing/*
+!storage/framework/testing/.gitkeep
+bootstrap/cache/*
+!bootstrap/cache/.gitkeep
+.phpunit.result.cache
+.php_cs.cache
+.php-cs-fixer.cache
+
+# Testing
+tests
+phpunit.xml
+.phpunit.cache
+
+# Documentation and examples
+docs
+*.mmd
+erd*.svg
+database.mmd
+
+# Build artifacts
+builds
+dist
+tmp
+
+# Deployment and infrastructure (not needed in container)
+docker-compose.yml
+docker-bake.hcl
+.s3deploy.yml
+Caddyfile.console
+
+# Scripts not needed in runtime
+create-erd.sh
+mermaid.py
+mmdc.json
+scripts
+
+# Workflows
+workflows
+infra
+
+# Keep only what's necessary for Railway
+# Docker files are needed for Railway to build different services
+# !Dockerfile.railway
+# !Dockerfile.queue
+# !Dockerfile.scheduler

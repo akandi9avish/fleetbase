@@ -1,0 +1,25 @@
+# Railway Configuration for Fleetbase
+# This file defines how Railway should build and deploy Fleetbase services
+
+# Default build configuration (for API service)
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile.railway"
+
+# Default deployment configuration
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+numReplicas = 1
+
+# Environment-specific configurations
+[environments.production.deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "always"
+
+[environments.staging.deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 60

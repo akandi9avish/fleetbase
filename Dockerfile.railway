@@ -1,0 +1,149 @@
+# syntax = docker/dockerfile:1.2
+# Railway-Optimized Fleetbase API Server
+# Bypasses AWS SSM and uses Railway environment variables directly
+
+# Base stage
+FROM dunglas/frankenphp:1.5.0-php8.2-bookworm AS base
+
+# Install ALL packages (complete Fleetbase requirements)
+RUN apt-get update && apt-get install -y \
+    git \
+    bind9-utils \
+    mycli \
+    nodejs \
+    npm \
+    nano \
+    uuid-runtime \
+    curl \
+    unzip \
+    ca-certificates \
+  && mkdir -p /root/.ssh \
+  && ssh-keyscan github.com >> /root/.ssh/known_hosts \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install PHP Extensions
+RUN install-php-extensions \
+  pdo_mysql \
+  gd \
+  bcmath \
+  redis \
+  intl \
+  zip \
+  gmp \
+  apcu \
+  opcache \
+  memcached \
+  imagick \
+  sockets \
+  pcntl \
+  @composer
+
+# Install build dependencies for GEOS
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       pkg-config \
+       libgeos-dev \
+       libgeos++-dev \
+       autoconf \
+       build-essential \
+       unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download, extract, compile, and enable the php-geos extension
+RUN curl -fsSL -o php-geos.zip \
+      https://github.com/libgeos/php-geos/archive/dfe1ab17b0f155cc315bc13c75689371676e02e1.zip \
+    && unzip php-geos.zip \
+    && rm php-geos.zip \
+    && cd php-geos-* \
+    && ./autogen.sh \
+    && ./configure \
+    && make -j"$(nproc)" install \
+    && docker-php-ext-enable geos \
+    && cd .. \
+    && rm -rf php-geos-*
+
+# Update PHP configurations for production
+RUN sed -e 's/^expose_php.*/expose_php = Off/' "$PHP_INI_DIR/php.ini-production" > "$PHP_INI_DIR/php.ini" \
+  && sed -i -e 's/^upload_max_filesize.*/upload_max_filesize = 600M/' \
+        -e 's/^post_max_size.*/post_max_size = 0/' \
+        -e 's/^memory_limit.*/memory_limit = 600M/' \
+        -e 's/^max_execution_time.*/max_execution_time = 300/' \
+        "$PHP_INI_DIR/php.ini"
+
+# Install global node modules
+RUN npm install -g chokidar pnpm ember-cli npm-cli-login
+
+# Create the pnpm directory and set the PNPM_HOME environment variable
+RUN mkdir -p ~/.pnpm
+ENV PNPM_HOME=/root/.pnpm
+
+# Add the pnpm global bin to the PATH
+ENV PATH=/root/.pnpm/bin:$PATH
+
+# Set build ENV variables
+ENV LOG_CHANNEL=stderr
+ENV CACHE_DRIVER=redis
+ENV BROADCAST_DRIVER=socketcluster
+ENV QUEUE_CONNECTION=redis
+ENV CADDYFILE_PATH=/fleetbase/Caddyfile
+ENV CONSOLE_PATH=/fleetbase/console
+ENV OCTANE_SERVER=frankenphp
+ENV FLEETBASE_VERSION=0.7.15
+ENV APP_ENV=production
+
+# Copy Caddyfile
+COPY --chown=www-data:www-data ./Caddyfile $CADDYFILE_PATH
+
+# Create /fleetbase directory and set correct permissions
+RUN mkdir -p /fleetbase/api && mkdir -p /fleetbase/console && chown -R www-data:www-data /fleetbase
+
+# Generate and store a UUID in .fleetbase-id
+RUN uuidgen > /fleetbase/api/.fleetbase-id
+
+# Export the same ID as an environment variable for use in the container
+RUN export FLEETBASE_INSTANCE_ID=$(cat /fleetbase/api/.fleetbase-id) && \
+    echo "FLEETBASE_INSTANCE_ID=$FLEETBASE_INSTANCE_ID" >> /etc/environment
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Prepare composer cache directory
+RUN mkdir -p /var/www/.cache/composer && chown -R www-data:www-data /var/www/.cache/composer
+
+# Optimize Composer Dependency Installation
+COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
+
+# Pre-install Composer dependencies
+RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
+
+# Setup application
+COPY --chown=www-data:www-data ./api /fleetbase/api
+
+# Dump autoload
+RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
+
+# Setup composer root directory
+RUN mkdir -p /root/.composer
+RUN mkdir -p /fleetbase/api/.composer && chown www-data:www-data /fleetbase/api/.composer
+
+# Setup logging
+RUN mkdir -p /fleetbase/api/storage/logs/ && touch /fleetbase/api/storage/logs/laravel-$(date +'%Y-%m-%d').log
+RUN chown -R www-data:www-data /fleetbase/api/storage
+RUN chmod -R 775 /fleetbase/api/storage
+RUN chmod -R 775 /fleetbase/api/bootstrap/cache
+
+# Set permissions for deploy script if it exists
+RUN if [ -f /fleetbase/api/deploy.sh ]; then chmod +x /fleetbase/api/deploy.sh; fi
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || curl -f http://localhost:8000 || exit 1
+
+# CRITICAL: Use standard docker-php-entrypoint instead of ssm-parent
+ENTRYPOINT ["docker-php-entrypoint"]
+
+# Start command: Run migrations, optimize, and start Octane
+CMD ["sh", "-c", "php artisan migrate --force && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]
