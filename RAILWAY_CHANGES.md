@@ -262,13 +262,20 @@ public function register()
 
 **Solution**:
 ```dockerfile
-# Dockerfile.railway lines 144-150
+# Dockerfile.railway lines 144-151
 COPY ./docker/patches/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php /tmp/migration-patch-vehicle-devices.php
-RUN cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php"
+RUN echo "🔧 Adding vehicle_devices UUID index pre-migration..." && \
+    mkdir -p /fleetbase/api/database/migrations && \
+    cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+    chown www-data:www-data "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+    rm /tmp/migration-patch-vehicle-devices.php && \
+    echo "✅ Vehicle devices index pre-migration added successfully"
 ```
 
 **How It Works**:
 - Created idempotent pre-migration with timestamp `2023_10_25_093013` (runs before `2023_10_25_093014_create_vehicle_device_events_table`)
+- During Docker build, creates `/fleetbase/api/database/migrations` directory (Laravel doesn't create this by default)
+- Copies pre-migration patch to application's migrations directory
 - Migration checks if table, column, and index exist before adding index
 - Uses `SHOW INDEX` query to verify index doesn't already exist
 - Adds index only if needed: `$table->index('uuid', 'vehicle_devices_uuid_index')`
