@@ -1,0 +1,287 @@
+# syntax = docker/dockerfile:1.2
+# Railway-Optimized Fleetbase API Server
+# Bypasses AWS SSM and uses Railway environment variables directly
+
+# Base stage
+FROM dunglas/frankenphp:1.5.0-php8.2-bookworm AS base
+
+# Install ALL packages (complete Fleetbase requirements)
+RUN apt-get update && apt-get install -y \
+    git \
+    bind9-utils \
+    mycli \
+    nodejs \
+    npm \
+    nano \
+    uuid-runtime \
+    curl \
+    unzip \
+    ca-certificates \
+  && mkdir -p /root/.ssh \
+  && ssh-keyscan github.com >> /root/.ssh/known_hosts \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install PHP Extensions
+RUN install-php-extensions \
+  pdo_mysql \
+  gd \
+  bcmath \
+  redis \
+  intl \
+  zip \
+  gmp \
+  apcu \
+  opcache \
+  memcached \
+  imagick \
+  sockets \
+  pcntl \
+  @composer
+
+# Install build dependencies for GEOS
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       pkg-config \
+       libgeos-dev \
+       libgeos++-dev \
+       autoconf \
+       build-essential \
+       unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download, extract, compile, and enable the php-geos extension
+RUN curl -fsSL -o php-geos.zip \
+      https://github.com/libgeos/php-geos/archive/dfe1ab17b0f155cc315bc13c75689371676e02e1.zip \
+    && unzip php-geos.zip \
+    && rm php-geos.zip \
+    && cd php-geos-* \
+    && ./autogen.sh \
+    && ./configure \
+    && make -j"$(nproc)" install \
+    && docker-php-ext-enable geos \
+    && cd .. \
+    && rm -rf php-geos-*
+
+# Update PHP configurations for production
+RUN sed -e 's/^expose_php.*/expose_php = Off/' "$PHP_INI_DIR/php.ini-production" > "$PHP_INI_DIR/php.ini" \
+  && sed -i -e 's/^upload_max_filesize.*/upload_max_filesize = 600M/' \
+        -e 's/^post_max_size.*/post_max_size = 0/' \
+        -e 's/^memory_limit.*/memory_limit = 600M/' \
+        -e 's/^max_execution_time.*/max_execution_time = 300/' \
+        "$PHP_INI_DIR/php.ini"
+
+# Install global node modules
+RUN npm install -g chokidar pnpm ember-cli npm-cli-login
+
+# Create the pnpm directory and set the PNPM_HOME environment variable
+RUN mkdir -p ~/.pnpm
+ENV PNPM_HOME=/root/.pnpm
+
+# Add the pnpm global bin to the PATH
+ENV PATH=/root/.pnpm/bin:$PATH
+
+# Set build ENV variables
+ENV LOG_CHANNEL=stderr
+ENV CACHE_DRIVER=redis
+ENV BROADCAST_DRIVER=socketcluster
+ENV QUEUE_CONNECTION=redis
+ENV CADDYFILE_PATH=/fleetbase/Caddyfile
+ENV CONSOLE_PATH=/fleetbase/console
+ENV OCTANE_SERVER=frankenphp
+ENV FLEETBASE_VERSION=0.7.15
+ENV APP_ENV=production
+
+# Copy Caddyfile
+COPY --chown=www-data:www-data ./Caddyfile $CADDYFILE_PATH
+
+# Create /fleetbase directory and set correct permissions
+RUN mkdir -p /fleetbase/api && mkdir -p /fleetbase/console && chown -R www-data:www-data /fleetbase
+
+# Generate and store a UUID in .fleetbase-id
+RUN uuidgen > /fleetbase/api/.fleetbase-id
+
+# Export the same ID as an environment variable for use in the container
+RUN export FLEETBASE_INSTANCE_ID=$(cat /fleetbase/api/.fleetbase-id) && \
+    echo "FLEETBASE_INSTANCE_ID=$FLEETBASE_INSTANCE_ID" >> /etc/environment
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Prepare composer cache directory
+RUN mkdir -p /var/www/.cache/composer && chown -R www-data:www-data /var/www/.cache/composer
+
+# Optimize Composer Dependency Installation
+COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
+
+# Pre-install Composer dependencies
+RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
+
+# Setup application
+COPY --chown=www-data:www-data ./api /fleetbase/api
+
+# Copy migration patches
+COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch-permissions.php
+COPY --chown=www-data:www-data ./docker/patches/2023_10_25_093014_create_vehicle_device_events_table.php /tmp/migration-patch-vehicle-device-events.php
+COPY --chown=www-data:www-data ./docker/patches/2024_01_24_072725_add_foreign_keys_to_dashboard_widgets_table.php /tmp/migration-patch-dashboard-widgets.php
+COPY --chown=www-data:www-data ./docker/patches/2024_01_31_063635_create_comments_table.php /tmp/migration-patch-comments.php
+COPY --chown=www-data:www-data ./docker/patches/2024_02_04_051200_create_custom_fields_table.php /tmp/migration-patch-custom-fields.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090455_create_chat_channels_table.php /tmp/migration-patch-chat-channels.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090456_create_chat_participants_table.php /tmp/migration-patch-chat-participants.php
+COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_messages_table.php /tmp/migration-patch-chat-messages.php
+
+# Dump autoload
+RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
+
+# CRITICAL FIX #1: Apply idempotent permissions migration patch
+# This prevents "Table already exists" errors on container restarts
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_25_094304_create_permissions_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent permissions migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-permissions.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-permissions.php && \
+        echo "✅ Permissions migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase -name "2023_04_25_094304_create_permissions_table.php" 2>/dev/null || true; \
+    fi
+
+# CRITICAL FIX #2: Patch vehicle_device_events migration to be idempotent
+# This prevents "Duplicate key name" errors on database remnants from failed deployments
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2023_10_25_093014_create_vehicle_device_events_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent vehicle_device_events migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-vehicle-device-events.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-vehicle-device-events.php && \
+        echo "✅ Vehicle device events migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*vehicle_device_events*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #3: Patch dashboard_widgets foreign key migration to be idempotent
+# This prevents "Missing unique key" errors by adding unique index to dashboards.uuid before foreign key
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_01_24_072725_add_foreign_keys_to_dashboard_widgets_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent dashboard_widgets foreign key migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-dashboard-widgets.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-dashboard-widgets.php && \
+        echo "✅ Dashboard widgets foreign key migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*dashboard_widgets*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #4: Patch comments table migration to be idempotent with unique index for self-referential FK
+# This prevents "Missing unique key" errors for self-referential parent_comment_uuid foreign key
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_01_31_063635_create_comments_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent comments table migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-comments.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-comments.php && \
+        echo "✅ Comments table migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*comments*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #5: Patch custom_fields table migration to add unique index on uuid
+# custom_field_values references custom_fields.uuid, which only has regular index
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_02_04_051200_create_custom_fields_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent custom_fields migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-custom-fields.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-custom-fields.php && \
+        echo "✅ Custom fields migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*custom_fields*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #6: Patch chat_channels table migration to add unique index on uuid
+# chat_participants, chat_messages, and chat_attachments all reference chat_channels.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090455_create_chat_channels_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_channels migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-channels.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-channels.php && \
+        echo "✅ Chat channels migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_channels*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #7: Patch chat_participants table migration to add unique index on uuid
+# chat_messages, chat_attachments, and chat_receipts all reference chat_participants.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090456_create_chat_participants_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_participants migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-participants.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-participants.php && \
+        echo "✅ Chat participants migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_participants*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #8: Patch chat_messages table migration to add unique index on uuid
+# chat_attachments and chat_receipts reference chat_messages.uuid
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_01_090458_create_chat_messages_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent chat_messages migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-chat-messages.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-chat-messages.php && \
+        echo "✅ Chat messages migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "📂 Searching for migration file..." && \
+        find /fleetbase/api/vendor/fleetbase -name "*chat_messages*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# Setup composer root directory
+RUN mkdir -p /root/.composer
+RUN mkdir -p /fleetbase/api/.composer && chown www-data:www-data /fleetbase/api/.composer
+
+# Setup logging
+RUN mkdir -p /fleetbase/api/storage/logs/ && touch /fleetbase/api/storage/logs/laravel-$(date +'%Y-%m-%d').log
+RUN chown -R www-data:www-data /fleetbase/api/storage
+RUN chmod -R 775 /fleetbase/api/storage
+RUN chmod -R 775 /fleetbase/api/bootstrap/cache
+
+# Set permissions for deploy script if it exists
+RUN if [ -f /fleetbase/api/deploy.sh ]; then chmod +x /fleetbase/api/deploy.sh; fi
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || curl -f http://localhost:8000 || exit 1
+
+# CRITICAL: Use standard docker-php-entrypoint instead of ssm-parent
+ENTRYPOINT ["docker-php-entrypoint"]
+
+# Start command: Run migrations with isolation lock, optimize, and start Octane
+# --isolated flag prevents concurrent migration execution using Redis atomic locks
+CMD ["sh", "-c", "php artisan migrate --force --isolated && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]

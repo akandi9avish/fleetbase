@@ -1,0 +1,124 @@
+# syntax = docker/dockerfile:1.2
+# Railway-Optimized Fleetbase Scheduler
+# Runs Laravel scheduled tasks via go-crond
+
+# Base stage
+FROM dunglas/frankenphp:1.5.0-php8.2-bookworm
+
+# Install ALL packages (complete Fleetbase requirements)
+RUN apt-get update && apt-get install -y \
+    git \
+    bind9-utils \
+    mycli \
+    nodejs \
+    npm \
+    nano \
+    uuid-runtime \
+    curl \
+    unzip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install go-crond for cron support
+RUN curl -L https://github.com/webdevops/go-crond/releases/download/23.12.0/go-crond.linux.amd64 > /usr/local/bin/go-crond \
+    && chmod +x /usr/local/bin/go-crond
+
+# Install ALL PHP Extensions (complete Fleetbase requirements)
+RUN install-php-extensions \
+  pdo_mysql \
+  gd \
+  bcmath \
+  redis \
+  intl \
+  zip \
+  gmp \
+  apcu \
+  opcache \
+  memcached \
+  imagick \
+  sockets \
+  pcntl \
+  @composer
+
+# Install build dependencies for GEOS
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       pkg-config \
+       libgeos-dev \
+       libgeos++-dev \
+       autoconf \
+       build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download, extract, compile, and enable the php-geos extension
+RUN curl -fsSL -o php-geos.zip \
+      https://github.com/libgeos/php-geos/archive/dfe1ab17b0f155cc315bc13c75689371676e02e1.zip \
+    && unzip php-geos.zip \
+    && rm php-geos.zip \
+    && cd php-geos-* \
+    && ./autogen.sh \
+    && ./configure \
+    && make -j"$(nproc)" install \
+    && docker-php-ext-enable geos \
+    && cd .. \
+    && rm -rf php-geos-*
+
+# Install global node modules
+RUN npm install -g chokidar pnpm ember-cli npm-cli-login
+
+# Create the pnpm directory and set the PNPM_HOME environment variable
+RUN mkdir -p ~/.pnpm
+ENV PNPM_HOME=/root/.pnpm
+ENV PATH=/root/.pnpm/bin:$PATH
+
+# Update PHP configurations
+RUN sed -e 's/^expose_php.*/expose_php = Off/' "$PHP_INI_DIR/php.ini-production" > "$PHP_INI_DIR/php.ini" \
+  && sed -i -e 's/^memory_limit.*/memory_limit = 256M/' \
+        -e 's/^max_execution_time.*/max_execution_time = 300/' \
+        "$PHP_INI_DIR/php.ini"
+
+# Set environment variables
+ENV LOG_CHANNEL=stderr
+ENV CACHE_DRIVER=redis
+ENV QUEUE_CONNECTION=redis
+ENV APP_ENV=production
+
+# Create /fleetbase directory
+RUN mkdir -p /fleetbase/api && chown -R www-data:www-data /fleetbase
+
+# Set working directory
+WORKDIR /fleetbase/api
+
+# Prepare composer cache directory
+RUN mkdir -p /var/www/.cache/composer && chown -R www-data:www-data /var/www/.cache/composer
+
+# Copy composer files
+COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
+
+# Install Composer dependencies
+RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
+
+# Copy application code
+COPY --chown=www-data:www-data ./api /fleetbase/api
+
+# Dump optimized autoloader
+RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
+
+# Copy crontab
+COPY docker/crontab ./crontab
+RUN chmod 0600 ./crontab
+
+# Setup logging
+RUN mkdir -p /fleetbase/api/storage/logs/ && touch /fleetbase/api/storage/logs/scheduler-$(date +'%Y-%m-%d').log
+RUN chown -R www-data:www-data /fleetbase/api/storage
+RUN chmod -R 775 /fleetbase/api/storage
+
+# Health check for scheduler (checks if go-crond is running)
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+    CMD pgrep -f go-crond || exit 1
+
+# No ENTRYPOINT needed - go-crond runs directly
+ENTRYPOINT []
+
+# Start go-crond with verbose logging
+CMD ["go-crond", "--verbose", "--allow-unprivileged", "root:./crontab"]

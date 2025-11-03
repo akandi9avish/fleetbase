@@ -1,17 +1,12 @@
-# 🚀 Fleetbase v0.7.13 — 2025-10-28
+# 🚀 Fleetbase v0.7.15 — 2025-11-01
 
-> “Connectivity Module + Positions Playback + Positions & Device Events Drawer”
+> "Optimization tune-up, prevent queue blockage"
 
 ---
 
 ## ✨ Highlights
-- Introduces the new Connectivity module in Fleet-Ops for managing telematics, devices, sensors with native support for Flespi, Geotab, and Samsara built in.
-- Introduces Position replay for Vehicles
-- Added new live map drawer tabs "Positions", and "Events" to view all trackable resources position data, as well as replay positions
-- Improved the report query builder + fix drag sort on group by/aggregate fn and order by columns
-- Patched entities by destination order view
-- Improved movement tracker service to account for spead, improved bearing/heading for accurate playback and live tracking of assets
-- Improved tracking endpoint for both vehicles and drivers
+- Create surgical optimziations around metadata option data, as well as order methods to prevent trigger lifecycle jobs.
+- Updated order `setDistanceAndTime` to prevent lifecycle job triggers, order estimation tracking limited to orders within past 2 days instead of month, now runs every 10 minutes instead of 5 minutes.
 
 ---
 
