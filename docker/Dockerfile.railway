@@ -131,6 +131,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_me
 COPY --chown=www-data:www-data ./docker/patches/2024_03_07_054635_create_custom_field_values_table.php /tmp/migration-patch-custom-field-values.php
 COPY --chown=www-data:www-data ./docker/patches/2024_11_02_000000_add_missing_unique_indexes.php /tmp/migration-add-unique-indexes.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_07_075508_add_order_config_uuid_column_to_orders_table.php /tmp/migration-patch-order-config-uuid.php
+COPY --chown=www-data:www-data ./docker/patches/2024_03_21_051614_create_registry_extensions_table.php /tmp/migration-patch-registry-extensions.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -302,6 +303,21 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migratio
     else \
         echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
         find /fleetbase/api/vendor/fleetbase -name "*order_config_uuid*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #12: Patch create_registry_extensions_table migration
+# This migration tries to add FK to registry_users.uuid which doesn't have unique index
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/registry-bridge/server/migrations/2024_03_21_051614_create_registry_extensions_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent registry_extensions migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-registry-extensions.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-registry-extensions.php && \
+        echo "✅ Registry extensions migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        find /fleetbase/api/vendor/fleetbase -name "*registry_extensions*" 2>/dev/null || true; \
         exit 1; \
     fi
 
