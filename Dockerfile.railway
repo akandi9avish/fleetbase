@@ -119,26 +119,35 @@ RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoload
 # Setup application
 COPY --chown=www-data:www-data ./api /fleetbase/api
 
-# Copy migration patch
-COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch.php
+# Copy migration patches
+COPY --chown=www-data:www-data ./docker/patches/2023_04_25_094304_create_permissions_table.php /tmp/migration-patch-permissions.php
+COPY --chown=www-data:www-data ./docker/patches/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php /tmp/migration-patch-vehicle-devices.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
 
-# CRITICAL FIX: Apply idempotent migration patch
+# CRITICAL FIX #1: Apply idempotent permissions migration patch
 # This prevents "Table already exists" errors on container restarts
 RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_25_094304_create_permissions_table.php" && \
     if [ -f "$MIGRATION_FILE" ]; then \
         echo "🔧 Applying idempotent permissions migration patch..." && \
         cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
-        cp /tmp/migration-patch.php "$MIGRATION_FILE" && \
-        rm /tmp/migration-patch.php && \
-        echo "✅ Migration patched successfully"; \
+        cp /tmp/migration-patch-permissions.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-permissions.php && \
+        echo "✅ Permissions migration patched successfully"; \
     else \
         echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
         echo "📂 Searching for migration file..." && \
         find /fleetbase -name "2023_04_25_094304_create_permissions_table.php" 2>/dev/null || true; \
     fi
+
+# CRITICAL FIX #2: Add vehicle_devices UUID index pre-migration
+# This prevents foreign key constraint errors in vehicle_device_events table
+RUN echo "🔧 Adding vehicle_devices UUID index pre-migration..." && \
+    cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+    chown www-data:www-data "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
+    rm /tmp/migration-patch-vehicle-devices.php && \
+    echo "✅ Vehicle devices index pre-migration added successfully"
 
 # Setup composer root directory
 RUN mkdir -p /root/.composer

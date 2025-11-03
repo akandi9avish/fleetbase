@@ -94,6 +94,17 @@ This document lists all modifications made to the original Fleetbase codebase to
 - **New Behavior**: Uses `DB_DATABASE` directly (e.g., "railway")
 - **Reason**: Enables single-database deployment on Railway.app
 
+### 12. **docker/patches/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php**
+- **Purpose**: Idempotent pre-migration to add UUID index to vehicle_devices table
+- **Key Changes**:
+  - Checks if `vehicle_devices` table and `uuid` column exist
+  - Checks if `vehicle_devices_uuid_index` already exists before creating it
+  - Adds index idempotently using `SHOW INDEX` query
+  - Prevents "Duplicate key name" errors on retries
+- **Applied**: During Docker build, copied to Laravel's database/migrations directory
+- **Runs Before**: `2023_10_25_093014_create_vehicle_device_events_table`
+- **Problem Solved**: Foreign key constraint errors when `vehicle_device_events` tries to reference `vehicle_devices.uuid` without an index
+
 ---
 
 ## 📝 Files Modified
@@ -236,7 +247,56 @@ public function register()
 
 ---
 
-### 3. **AWS SSM Removal**
+### 3. **Vehicle Devices UUID Index (CRITICAL FIX)**
+
+**Problem Solved**:
+- Migration fails: `create_vehicle_device_events_table`
+- Foreign key constraint error: "Missing unique key for constraint 'vehicle_device_events_vehicle_device_uuid_foreign' in the referenced table 'vehicle_devices'"
+- Retry error: "Duplicate key name 'vehicle_devices_uuid_index'"
+
+**Root Cause**:
+- The `create_vehicle_devices_table` migration creates a `uuid` column without an index
+- Later migration `create_vehicle_device_events_table` tries to create a foreign key referencing this UUID
+- MySQL requires a unique or indexed column for foreign key references
+- On retry, migration tries to add the index but fails because it already exists
+
+**Solution**:
+```dockerfile
+# Dockerfile.railway lines 144-150
+COPY ./docker/patches/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php /tmp/migration-patch-vehicle-devices.php
+RUN cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php"
+```
+
+**How It Works**:
+- Created idempotent pre-migration with timestamp `2023_10_25_093013` (runs before `2023_10_25_093014_create_vehicle_device_events_table`)
+- Migration checks if table, column, and index exist before adding index
+- Uses `SHOW INDEX` query to verify index doesn't already exist
+- Adds index only if needed: `$table->index('uuid', 'vehicle_devices_uuid_index')`
+- Foreign key constraints in subsequent migrations now succeed
+
+**Migration Code**:
+```php
+// Check if index already exists
+$indexName = 'vehicle_devices_uuid_index';
+$indexes = DB::select("SHOW INDEX FROM vehicle_devices WHERE Key_name = ?", [$indexName]);
+
+if (empty($indexes)) {
+    // Index doesn't exist, add it
+    Schema::table('vehicle_devices', function (Blueprint $table) {
+        $table->index('uuid', 'vehicle_devices_uuid_index');
+    });
+}
+```
+
+**Impact**:
+- Enables foreign key relationships to `vehicle_devices.uuid`
+- Prevents migration failures on fresh database deployments
+- Handles retries gracefully with idempotent checks
+- No application code changes required
+
+---
+
+### 4. **AWS SSM Removal**
 
 **Original Behavior**:
 ```dockerfile
@@ -255,7 +315,7 @@ ENTRYPOINT ["docker-php-entrypoint"]  # Standard PHP entrypoint, no SSM wrapper
 
 **Reason**: Railway uses environment variables directly, not AWS SSM Parameter Store.
 
-### 4. **Database Migrations with Concurrency Protection**
+### 5. **Database Migrations with Concurrency Protection**
 
 **Original Behavior**:
 - Migrations run manually or via separate deployment script
@@ -275,7 +335,7 @@ CMD ["sh", "-c", "php artisan migrate --force --isolated && php artisan config:c
 
 **Reason**: Ensures database is always up-to-date on deployment while preventing concurrent migration execution.
 
-### 5. **Logging Configuration**
+### 6. **Logging Configuration**
 
 **Original Behavior**:
 ```env
@@ -289,7 +349,7 @@ LOG_CHANNEL=stderr
 
 **Reason**: Railway's log aggregation system prefers stderr for application logs.
 
-### 6. **Health Checks**
+### 7. **Health Checks**
 
 **Added to all Dockerfiles**:
 ```dockerfile
@@ -308,7 +368,7 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
 
 **Reason**: Railway uses health checks for automatic restart and monitoring.
 
-### 7. **Private Networking**
+### 8. **Private Networking**
 
 **Original Behavior**:
 ```env
@@ -324,7 +384,7 @@ REDIS_HOST=${{Redis.RAILWAY_PRIVATE_DOMAIN}}
 
 **Reason**: Railway's internal networking uses service discovery via private domains.
 
-### 8. **Complete Package Installation**
+### 9. **Complete Package Installation**
 
 **Change**: All three application Dockerfiles (API, Queue, Scheduler) now include:
 - **System Packages**: git, bind9-utils, mycli, nodejs, npm, nano, uuid-runtime
