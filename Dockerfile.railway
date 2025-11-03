@@ -145,7 +145,7 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_
 # This prevents foreign key constraint errors in vehicle_device_events table
 # IMPORTANT: Must be placed in vendor directory to run BEFORE vehicle_device_events migration
 RUN echo "🔧 Adding vehicle_devices UUID index pre-migration..." && \
-    VENDOR_MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/fleetops-api/migrations" && \
+    VENDOR_MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations" && \
     if [ -d "$VENDOR_MIGRATION_DIR" ]; then \
         cp /tmp/migration-patch-vehicle-devices.php "$VENDOR_MIGRATION_DIR/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
         chown www-data:www-data "$VENDOR_MIGRATION_DIR/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
