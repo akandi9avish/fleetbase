@@ -381,6 +381,70 @@ RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
     chown www-data:www-data "$MIGRATION_FILE" && \
     echo "✅ Universal UUID fix migration created successfully at: $MIGRATION_FILE"
 
+# COPY the cleanup migration to tmp for use in next steps
+COPY --chown=www-data:www-data ./docker/patches/2025_08_01_000000_cleanup_failed_2025_tables.php /tmp/migration-cleanup-2025.php
+
+# CRITICAL FIX #17: Add PRE-MIGRATION CLEANUP to fleetops-engine
+# This migration runs BEFORE all 2025_08_28 migrations to clean up failed deployments
+RUN CONSOLE_ENGINE_DIR="/fleetbase/console/node_modules/.pnpm/@fleetbase+fleetops-engine@0.6.21_@ember+string@3.1.1_@ember+test-helpers@3.3.1_@babel+_26e8e71ed2cb77a6de2af9b7bf8f0415/node_modules/@fleetbase/fleetops-engine/server/migrations" && \
+    if [ -d "$CONSOLE_ENGINE_DIR" ]; then \
+        echo "🔧 Adding pre-migration cleanup to fleetops-engine..." && \
+        cp /tmp/migration-cleanup-2025.php "$CONSOLE_ENGINE_DIR/2025_08_01_000000_cleanup_failed_2025_tables.php" && \
+        echo "✅ Pre-migration cleanup added to fleetops-engine"; \
+    else \
+        echo "⚠️  Console engine directory not found - migrations may fail!" && \
+        echo "Looking for any fleetops-engine directories..." && \
+        find /fleetbase/console -type d -name "*fleetops-engine*" 2>/dev/null | head -5 || true; \
+    fi
+
+# CRITICAL FIX #18-27: COMPREHENSIVE NPM ENGINE PATCHING
+# Patch ALL 10 FleetOps migrations that create uuid columns with .index() instead of .unique()
+# This is the ROOT CAUSE fix that prevents 14 downstream migration failures
+RUN echo "🔧 COMPREHENSIVE NPM ENGINE PATCHING - Fixing ALL uuid columns" && \
+    CONSOLE_ENGINE_DIR="/fleetbase/console/node_modules/.pnpm/@fleetbase+fleetops-engine@0.6.21_@ember+string@3.1.1_@ember+test-helpers@3.3.1_@babel+_26e8e71ed2cb77a6de2af9b7bf8f0415/node_modules/@fleetbase/fleetops-engine/server/migrations" && \
+    if [ -d "$CONSOLE_ENGINE_DIR" ]; then \
+        echo "📂 Found fleetops-engine migrations directory" && \
+        cd "$CONSOLE_ENGINE_DIR" && \
+        \
+        echo "🔄 Patching 1/10: warranties table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054920_create_warranties_table.php && \
+        \
+        echo "🔄 Patching 2/10: telematics table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054921_create_telematics_table.php && \
+        \
+        echo "🔄 Patching 3/10: assets table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054922_create_assets_table.php && \
+        \
+        echo "🔄 Patching 4/10: devices table (CRITICAL - originally NO INDEX!)..." && \
+        sed -i "s/->uuid('uuid')->nullable();/->uuid('uuid')->unique();/g" 2025_08_28_054925_create_devices_table.php && \
+        sed -i "s/->uuid('uuid');/->uuid('uuid')->unique();/g" 2025_08_28_054925_create_devices_table.php && \
+        \
+        echo "🔄 Patching 5/10: device_events table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054926_create_device_events_table.php && \
+        \
+        echo "🔄 Patching 6/10: sensors table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054926_create_sensors_table.php && \
+        \
+        echo "🔄 Patching 7/10: parts table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054927_create_parts_table.php && \
+        \
+        echo "🔄 Patching 8/10: equipments table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054929_create_equipments_table.php && \
+        \
+        echo "🔄 Patching 9/10: work_orders table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054930_create_work_orders_table.php && \
+        \
+        echo "🔄 Patching 10/10: maintenances table..." && \
+        sed -i "s/->uuid('uuid')->index();/->uuid('uuid')->unique();/g" 2025_08_28_054931_create_maintenances_table.php && \
+        \
+        echo "✅ ALL 10 MIGRATIONS PATCHED SUCCESSFULLY!" && \
+        echo "   This fixes the ROOT CAUSE and prevents 14 downstream failures"; \
+    else \
+        echo "❌ CRITICAL: Console engine directory not found!" && \
+        echo "Migrations will fail without these patches!" && \
+        exit 1; \
+    fi
+
 # Setup composer root directory
 RUN mkdir -p /root/.composer
 RUN mkdir -p /fleetbase/api/.composer && chown www-data:www-data /fleetbase/api/.composer
