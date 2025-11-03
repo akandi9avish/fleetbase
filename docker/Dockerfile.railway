@@ -133,6 +133,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_11_02_000000_add_missing_un
 COPY --chown=www-data:www-data ./docker/patches/2024_03_07_075508_add_order_config_uuid_column_to_orders_table.php /tmp/migration-patch-order-config-uuid.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_21_051614_create_registry_extensions_table.php /tmp/migration-patch-registry-extensions.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_25_044537_create_registry_extension_bundles_table.php /tmp/migration-patch-registry-extension-bundles.php
+COPY --chown=www-data:www-data ./docker/patches/2024_08_27_090558_create_directives_table.php /tmp/migration-patch-directives.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -335,6 +336,21 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/registry-bridge/server/migra
     else \
         echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
         find /fleetbase/api/vendor/fleetbase -name "*registry_extension_bundles*" 2>/dev/null || true; \
+        exit 1; \
+    fi
+
+# CRITICAL FIX #14: Patch directives table migration to be idempotent
+# This prevents "Table already exists" errors and FK constraint failures
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_08_27_090558_create_directives_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent directives migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-directives.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-directives.php && \
+        echo "✅ Directives migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        find /fleetbase/api/vendor/fleetbase -name "*directives*" 2>/dev/null || true; \
         exit 1; \
     fi
 
