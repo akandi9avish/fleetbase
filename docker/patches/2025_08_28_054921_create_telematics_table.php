@@ -49,16 +49,19 @@ return new class extends Migration {
             });
         }
 
-        // Step 2: Add indexes on foreign key columns if missing
+        // Step 2: Add UNIQUE index on uuid column (required for FKs from assets, etc.)
         if (Schema::hasTable('telematics')) {
             Schema::table('telematics', function (Blueprint $table) {
-                // Check for uuid index
-                $uuidIndexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'uuid'");
+                // Check for uuid UNIQUE index
+                $uuidIndexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'uuid' AND Non_unique = 0");
                 if (empty($uuidIndexes)) {
                     try {
-                        $table->index('uuid');
+                        // CRITICAL: Must be UNIQUE, not just indexed, for FK constraints
+                        $table->unique('uuid');
+                        echo "✅ Added UNIQUE constraint to telematics.uuid\n";
                     } catch (\Exception $e) {
                         // Index might already exist
+                        echo "⚠️  Could not add UNIQUE to telematics.uuid: {$e->getMessage()}\n";
                     }
                 }
 

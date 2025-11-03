@@ -26,7 +26,7 @@ return new class extends Migration {
         $tablesToClean = [
             'telematics',
             'warranties',
-            'assets',
+            'assets',       // 2025_08_28_054922: May fail due to telematics.uuid not having UNIQUE
             'devices', // This is renamed from vehicle_devices, but cleanup the new name if exists
             'device_events', // This is renamed from vehicle_device_events
             'sensors',
