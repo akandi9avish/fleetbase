@@ -77,6 +77,32 @@ This document lists all modifications made to the original Fleetbase codebase to
 
 ---
 
+## 📝 Files Modified
+
+### 1. **api/composer.json**
+- **Purpose**: Fix Spatie Laravel-Permission migration conflict
+- **Change**:
+  ```json
+  "extra": {
+      "laravel": {
+          "dont-discover": [
+              "spatie/laravel-permission"
+          ]
+      }
+  }
+  ```
+- **Reason**:
+  - Fleetbase Core-API depends on `spatie/laravel-permission` package
+  - Fleetbase Core-API also has its own `create_permissions_table` migration
+  - Both packages try to create the same 5 tables: `permissions`, `roles`, `model_has_permissions`, `model_has_roles`, `role_has_permissions`
+  - Laravel's auto-discovery loads both packages' service providers
+  - Whichever migration runs first succeeds, the second fails with "Table 'permissions' already exists"
+  - **Solution**: Disable Spatie's auto-discovery to prevent duplicate migrations
+  - Fleetbase can still use Spatie's runtime code (models, traits) through its custom implementation
+  - This is a known architectural design choice by Fleetbase to use UUIDs instead of integer IDs
+
+---
+
 ## 🔧 Key Technical Changes
 
 ### 1. **AWS SSM Removal**
