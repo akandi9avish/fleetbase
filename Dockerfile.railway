@@ -144,6 +144,7 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2023_04_
 # CRITICAL FIX #2: Add vehicle_devices UUID index pre-migration
 # This prevents foreign key constraint errors in vehicle_device_events table
 RUN echo "🔧 Adding vehicle_devices UUID index pre-migration..." && \
+    mkdir -p /fleetbase/api/database/migrations && \
     cp /tmp/migration-patch-vehicle-devices.php "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
     chown www-data:www-data "/fleetbase/api/database/migrations/2023_10_25_093013_add_uuid_index_to_vehicle_devices.php" && \
     rm /tmp/migration-patch-vehicle-devices.php && \
