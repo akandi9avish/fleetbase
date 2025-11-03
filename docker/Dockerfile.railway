@@ -134,6 +134,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_03_07_075508_add_order_conf
 COPY --chown=www-data:www-data ./docker/patches/2024_03_21_051614_create_registry_extensions_table.php /tmp/migration-patch-registry-extensions.php
 COPY --chown=www-data:www-data ./docker/patches/2024_03_25_044537_create_registry_extension_bundles_table.php /tmp/migration-patch-registry-extension-bundles.php
 COPY --chown=www-data:www-data ./docker/patches/2024_08_27_090558_create_directives_table.php /tmp/migration-patch-directives.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_01_000000_cleanup_failed_2025_tables.php /tmp/migration-cleanup-2025-tables.php
 COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054921_create_telematics_table.php /tmp/migration-patch-telematics.php
 COPY --chown=www-data:www-data ./docker/patches/2025_11_03_000000_universal_uuid_unique_index_fix.php /tmp/migration-universal-uuid-fix.php
 
@@ -356,9 +357,21 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_08_
         exit 1; \
     fi
 
-# CRITICAL FIX #15: Patch telematics table migration to be idempotent
+# CRITICAL FIX #15: Deploy cleanup migration to drop incomplete tables from failed deployments
+# This migration runs FIRST (timestamp 2025_08_01) before the 2025_08_28 migrations
+# Ensures telematics and other partially-created tables are dropped cleanly
+RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
+    MIGRATION_FILE="$MIGRATION_DIR/2025_08_01_000000_cleanup_failed_2025_tables.php" && \
+    echo "🧹 Deploying cleanup migration for failed 2025 tables..." && \
+    cp /tmp/migration-cleanup-2025-tables.php "$MIGRATION_FILE" && \
+    rm /tmp/migration-cleanup-2025-tables.php && \
+    chown www-data:www-data "$MIGRATION_FILE" && \
+    echo "✅ Cleanup migration deployed successfully at: $MIGRATION_FILE"
+
+# CRITICAL FIX #16: Patch telematics table migration to be idempotent
 # This prevents FK constraint failures with warranties.uuid
-RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2025_08_28_054921_create_telematics_table.php" && \
+# NOTE: telematics migration is in fleetops-api, not core-api!
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2025_08_28_054921_create_telematics_table.php" && \
     if [ -f "$MIGRATION_FILE" ]; then \
         echo "🔧 Applying idempotent telematics migration patch..." && \
         cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
@@ -370,7 +383,7 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2025_08_
         echo "Migration might not exist yet - skipping"; \
     fi
 
-# CRITICAL FIX #16: Add UNIVERSAL UUID UNIQUE INDEX FIX migration
+# CRITICAL FIX #17: Add UNIVERSAL UUID UNIQUE INDEX FIX migration
 # This scans the entire database and ensures ALL uuid columns referenced by FKs have UNIQUE constraints
 # This prevents ALL future "Missing unique key for constraint" errors
 RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
