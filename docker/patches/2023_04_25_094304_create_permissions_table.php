@@ -22,7 +22,7 @@ return new class extends Migration {
 
         if (!Schema::hasTable($tableNames['permissions'])) {
             Schema::create($tableNames['permissions'], function (Blueprint $table) {
-                $table->uuid('id')->index();
+                $table->uuid('id')->primary();  // FIXED: Changed from ->index() to ->primary()
                 $table->string('name');
                 $table->string('guard_name');
                 $table->timestamps();
@@ -32,7 +32,7 @@ return new class extends Migration {
 
         if (!Schema::hasTable($tableNames['roles'])) {
             Schema::create($tableNames['roles'], function (Blueprint $table) {
-                $table->uuid('id')->index();
+                $table->uuid('id')->primary();  // FIXED: Changed from ->index() to ->primary()
                 $table->string('name');
                 $table->string('guard_name');
                 $table->timestamps();
