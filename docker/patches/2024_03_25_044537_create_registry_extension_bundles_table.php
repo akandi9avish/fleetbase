@@ -69,7 +69,41 @@ return new class extends Migration {
             }
         }
 
-        // Step 3: Add indexes on other uuid columns if missing
+        // Step 3: CRITICAL - Ensure registry_extensions.uuid has unique index BEFORE we add FK to it
+        // The registry_extensions migration has already run, so we need to add this here
+        if (Schema::hasTable('registry_extensions') && Schema::hasColumn('registry_extensions', 'uuid')) {
+            // Check if there's ANY unique index on the uuid column
+            $uniqueIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Non_unique = 0 AND Key_name != 'PRIMARY'");
+
+            if (empty($uniqueIndexes)) {
+                echo "⚠️  registry_extensions.uuid does NOT have a unique index - adding one now...\n";
+
+                // Drop ALL non-unique indexes on uuid column first
+                $allIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY'");
+                foreach ($allIndexes as $index) {
+                    try {
+                        DB::statement("DROP INDEX {$index->Key_name} ON registry_extensions");
+                        echo "Dropped index {$index->Key_name} from registry_extensions.uuid\n";
+                    } catch (\Exception $e) {
+                        echo "Warning: Could not drop index {$index->Key_name}: {$e->getMessage()}\n";
+                    }
+                }
+
+                // Now add the unique index
+                $uniqueIndexName = 'registry_extensions_uuid_unique';
+                try {
+                    DB::statement("ALTER TABLE registry_extensions ADD UNIQUE INDEX {$uniqueIndexName} (uuid)");
+                    echo "✅ Added unique index {$uniqueIndexName} to registry_extensions.uuid\n";
+                } catch (\Exception $e) {
+                    echo "⚠️  CRITICAL ERROR: Could not add unique index to registry_extensions.uuid: {$e->getMessage()}\n";
+                    throw $e;
+                }
+            } else {
+                echo "ℹ️  registry_extensions.uuid already has unique index - good!\n";
+            }
+        }
+
+        // Step 4: Add indexes on other uuid columns if missing
         if (Schema::hasTable('registry_extension_bundles')) {
             Schema::table('registry_extension_bundles', function (Blueprint $table) {
                 // Check for public_id index
@@ -94,7 +128,7 @@ return new class extends Migration {
             });
         }
 
-        // Step 4: Add foreign keys from registry_extension_bundles to other tables if they don't exist
+        // Step 5: Add foreign keys from registry_extension_bundles to other tables if they don't exist
         if (Schema::hasTable('registry_extension_bundles')) {
             // Check and add company_uuid FK
             $companyFkExists = DB::select(
@@ -149,7 +183,7 @@ return new class extends Migration {
             }
         }
 
-        // Step 5: Add bidirectional FKs from registry_extensions to registry_extension_bundles
+        // Step 6: Add bidirectional FKs from registry_extensions to registry_extension_bundles
         if (Schema::hasTable('registry_extensions')) {
             // Check and add current_bundle_uuid FK
             $currentBundleFkExists = DB::select(
