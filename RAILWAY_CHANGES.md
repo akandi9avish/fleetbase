@@ -98,17 +98,25 @@ ENTRYPOINT ["docker-php-entrypoint"]  # Standard PHP entrypoint, no SSM wrapper
 
 **Reason**: Railway uses environment variables directly, not AWS SSM Parameter Store.
 
-### 2. **Database Migrations**
+### 2. **Database Migrations with Concurrency Protection**
 
 **Original Behavior**:
 - Migrations run manually or via separate deployment script
 
 **Railway Behavior**:
 ```dockerfile
-CMD ["sh", "-c", "php artisan migrate --force && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]
+CMD ["sh", "-c", "php artisan migrate --force --isolated && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]
 ```
 
-**Reason**: Ensures database is always up-to-date on deployment.
+**Key Addition**: `--isolated` flag prevents race conditions when multiple instances start simultaneously.
+
+**How It Works**:
+- Laravel acquires an atomic lock via Redis before running migrations
+- Other instances wait for the lock to be released
+- Prevents "table already exists" errors in concurrent deployments
+- Essential for MySQL 9.0+ which has stricter foreign key enforcement
+
+**Reason**: Ensures database is always up-to-date on deployment while preventing concurrent migration execution.
 
 ### 3. **Logging Configuration**
 
