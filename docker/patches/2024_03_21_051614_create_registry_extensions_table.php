@@ -101,29 +101,35 @@ return new class extends Migration {
 
         // Step 3: Add UNIQUE index on registry_extensions.uuid (so other tables can reference it)
         if (Schema::hasTable('registry_extensions') && Schema::hasColumn('registry_extensions', 'uuid')) {
-            $uniqueIndexName = 'registry_extensions_uuid_unique';
-            $indexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Key_name = ? AND Non_unique = 0", [$uniqueIndexName]);
+            // Check if there's ANY unique index on the uuid column (not just a specific name)
+            $uniqueIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Non_unique = 0 AND Key_name != 'PRIMARY'");
 
-            if (empty($indexes)) {
-                // Drop any existing non-unique indexes on uuid
-                $regularIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY'");
+            if (empty($uniqueIndexes)) {
+                // No unique index exists, we need to create one
+                // First, drop ALL non-unique indexes on uuid column
+                $allIndexes = DB::select("SHOW INDEX FROM registry_extensions WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY'");
 
-                foreach ($regularIndexes as $index) {
-                    if ($index->Non_unique == 1) {
-                        try {
-                            DB::statement("DROP INDEX {$index->Key_name} ON registry_extensions");
-                        } catch (\Exception $e) {
-                            // Already dropped, continue
-                        }
+                foreach ($allIndexes as $index) {
+                    try {
+                        DB::statement("DROP INDEX {$index->Key_name} ON registry_extensions");
+                        echo "Dropped index {$index->Key_name} from registry_extensions.uuid\n";
+                    } catch (\Exception $e) {
+                        echo "Warning: Could not drop index {$index->Key_name}: {$e->getMessage()}\n";
                     }
                 }
 
-                // Add unique index to registry_extensions.uuid
+                // Now add the unique index
+                $uniqueIndexName = 'registry_extensions_uuid_unique';
                 try {
                     DB::statement("ALTER TABLE registry_extensions ADD UNIQUE INDEX {$uniqueIndexName} (uuid)");
+                    echo "✅ Added unique index {$uniqueIndexName} to registry_extensions.uuid\n";
                 } catch (\Exception $e) {
-                    // Index might already exist
+                    echo "⚠️  CRITICAL ERROR: Could not add unique index to registry_extensions.uuid: {$e->getMessage()}\n";
+                    // Rethrow to make the migration fail visibly
+                    throw $e;
                 }
+            } else {
+                echo "ℹ️  Unique index already exists on registry_extensions.uuid\n";
             }
         }
 
