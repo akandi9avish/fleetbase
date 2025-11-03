@@ -87,6 +87,13 @@ This document lists all modifications made to the original Fleetbase codebase to
   - Ensures migration can safely run multiple times
 - **Applied**: During Docker build, replaces vendor migration file
 
+### 11. **api/config/database.storefront.php**
+- **Purpose**: Override configuration for storefront database connection
+- **Key Change**: Removes `_storefront` suffix from database name
+- **Original Behavior**: Uses `DB_DATABASE . '_storefront'` (e.g., "railway_storefront")
+- **New Behavior**: Uses `DB_DATABASE` directly (e.g., "railway")
+- **Reason**: Enables single-database deployment on Railway.app
+
 ---
 
 ## 📝 Files Modified
@@ -112,6 +119,28 @@ This document lists all modifications made to the original Fleetbase codebase to
   - **Solution**: Disable Spatie's auto-discovery to prevent duplicate migrations
   - Fleetbase can still use Spatie's runtime code (models, traits) through its custom implementation
   - This is a known architectural design choice by Fleetbase to use UUIDs instead of integer IDs
+
+### 2. **api/app/Providers/AppServiceProvider.php**
+- **Purpose**: Override storefront database connection at runtime
+- **Change**: Added `register()` method that overrides storefront database configuration
+- **Key Code**:
+  ```php
+  public function register()
+  {
+      $this->app->booted(function () {
+          config([
+              'database.connections.storefront.database' => env('DB_DATABASE', 'fleetbase'),
+              // ... other connection settings
+          ]);
+      });
+  }
+  ```
+- **Reason**:
+  - Fleetbase Storefront package merges `database.connections.php` that appends `_storefront` suffix
+  - Original: `'database' => $database . '_storefront'` creates "railway_storefront" database
+  - Railway deployment needs single database (no separate storefront database)
+  - **Solution**: Override connection config after all packages boot to use same database
+  - This executes after all package service providers have registered their configs
 
 ---
 
@@ -161,7 +190,53 @@ if (!Schema::hasTable($tableNames['permissions'])) {
 
 ---
 
-### 2. **AWS SSM Removal**
+### 2. **Single Database for Storefront (CRITICAL FIX)**
+
+**Problem Solved**:
+- Storefront migrations fail with "Unknown database 'railway_storefront'"
+- Fleetbase Storefront package expects separate database with "_storefront" suffix
+- Railway deployment uses single database (no separate storefront database)
+- ERROR: "SQLSTATE[HY000] [1049] Unknown database 'railway_storefront'"
+
+**Root Cause**:
+```php
+// fleetbase/storefront-api/config/database.connections.php
+'database' => $database . '_storefront'  // Appends suffix
+```
+
+**Solution**:
+```php
+// api/app/Providers/AppServiceProvider.php
+public function register()
+{
+    $this->app->booted(function () {
+        config([
+            'database.connections.storefront.database' => env('DB_DATABASE', 'fleetbase'),
+            // ... other connection settings without suffix
+        ]);
+    });
+}
+```
+
+**How It Works**:
+- AppServiceProvider loads after all package service providers
+- Uses `$this->app->booted()` to ensure override happens after all packages register
+- Overrides `database.connections.storefront` configuration at runtime
+- Removes "_storefront" suffix, making storefront use same database as main connection
+- Both main and storefront connections now point to same database
+
+**Flow**:
+1. Composer installs `fleetbase/storefront-api` package
+2. Laravel auto-discovers `StorefrontServiceProvider`
+3. StorefrontServiceProvider merges `database.connections.php` (with suffix)
+4. AppServiceProvider's `register()` runs after all package providers
+5. `$this->app->booted()` callback executes after Laravel finishes booting
+6. Config override replaces storefront connection settings
+7. Migrations run with correct single-database configuration
+
+---
+
+### 3. **AWS SSM Removal**
 
 **Original Behavior**:
 ```dockerfile
@@ -180,7 +255,7 @@ ENTRYPOINT ["docker-php-entrypoint"]  # Standard PHP entrypoint, no SSM wrapper
 
 **Reason**: Railway uses environment variables directly, not AWS SSM Parameter Store.
 
-### 2. **Database Migrations with Concurrency Protection**
+### 4. **Database Migrations with Concurrency Protection**
 
 **Original Behavior**:
 - Migrations run manually or via separate deployment script
@@ -200,7 +275,7 @@ CMD ["sh", "-c", "php artisan migrate --force --isolated && php artisan config:c
 
 **Reason**: Ensures database is always up-to-date on deployment while preventing concurrent migration execution.
 
-### 3. **Logging Configuration**
+### 5. **Logging Configuration**
 
 **Original Behavior**:
 ```env
@@ -214,7 +289,7 @@ LOG_CHANNEL=stderr
 
 **Reason**: Railway's log aggregation system prefers stderr for application logs.
 
-### 4. **Health Checks**
+### 6. **Health Checks**
 
 **Added to all Dockerfiles**:
 ```dockerfile
@@ -233,7 +308,7 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
 
 **Reason**: Railway uses health checks for automatic restart and monitoring.
 
-### 5. **Private Networking**
+### 7. **Private Networking**
 
 **Original Behavior**:
 ```env
@@ -249,7 +324,7 @@ REDIS_HOST=${{Redis.RAILWAY_PRIVATE_DOMAIN}}
 
 **Reason**: Railway's internal networking uses service discovery via private domains.
 
-### 6. **Complete Package Installation**
+### 8. **Complete Package Installation**
 
 **Change**: All three application Dockerfiles (API, Queue, Scheduler) now include:
 - **System Packages**: git, bind9-utils, mycli, nodejs, npm, nano, uuid-runtime
