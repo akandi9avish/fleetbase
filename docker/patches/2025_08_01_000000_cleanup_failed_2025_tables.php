@@ -41,18 +41,7 @@ return new class extends Migration {
 
         foreach ($tablesToClean as $table) {
             if (Schema::hasTable($table)) {
-                echo "🗑️  Found partially created table: {$table}\n";
-
-                // Check if migration was marked as complete
-                $migrationCompleted = DB::table('migrations')
-                    ->where('migration', 'like', "%create_{$table}_table%")
-                    ->orWhere('migration', 'like', "%{$table}%")
-                    ->exists();
-
-                if ($migrationCompleted) {
-                    echo "   ✓ Migration marked complete for {$table} - skipping cleanup\n";
-                    continue;
-                }
+                echo "🗑️  Found table: {$table} - will drop and reset migration\n";
 
                 try {
                     // Disable foreign key checks temporarily
@@ -60,12 +49,36 @@ return new class extends Migration {
                     Schema::dropIfExists($table);
                     DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
+                    echo "   ✅ Dropped table: {$table}\n";
+
+                    // CRITICAL: Also remove migration entry so it will run again with new code
+                    // This ensures migrations with fixes (like adding UNIQUE to uuid) will re-run
+                    $deleted = DB::table('migrations')
+                        ->where('migration', 'like', "%create_{$table}_table%")
+                        ->orWhere('migration', 'like', "%{$table}%")
+                        ->delete();
+
+                    if ($deleted > 0) {
+                        echo "   ✅ Removed {$deleted} migration entry(ies) for {$table} - will re-run\n";
+                    }
+
                     $tablesDropped[] = $table;
-                    echo "   ✅ Dropped incomplete table: {$table}\n";
                 } catch (\Exception $e) {
                     echo "   ⚠️  Could not drop {$table}: {$e->getMessage()}\n";
                 }
             } else {
+                // Table doesn't exist - but check if migration entry exists and remove it
+                echo "ℹ️  Table {$table} not found - checking migration entries...\n";
+
+                $deleted = DB::table('migrations')
+                    ->where('migration', 'like', "%create_{$table}_table%")
+                    ->orWhere('migration', 'like', "%{$table}%")
+                    ->delete();
+
+                if ($deleted > 0) {
+                    echo "   ✅ Removed {$deleted} stale migration entry(ies) for {$table}\n";
+                }
+
                 $tablesNotFound[] = $table;
             }
         }
