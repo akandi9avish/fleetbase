@@ -18,74 +18,55 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        // Step 1: Create table if it doesn't exist
-        if (!Schema::hasTable('telematics')) {
-            Schema::create('telematics', function (Blueprint $table) {
-                $table->increments('id');
-                $table->uuid('uuid');
-                $table->string('_key')->nullable();
-                $table->uuid('company_uuid');
-                $table->string('name')->nullable();
-                $table->string('provider')->nullable();
-                $table->string('model')->nullable();
-                $table->string('serial_number')->nullable();
-                $table->string('firmware_version')->nullable();
-                $table->string('status')->default('active');
-                $table->string('imei')->nullable();
-                $table->string('iccid')->nullable();
-                $table->string('imsi')->nullable();
-                $table->string('msisdn')->nullable();
-                $table->string('type')->nullable();
-                $table->json('last_metrics')->nullable();
-                $table->json('config')->nullable();
-                $table->json('meta')->nullable();
-                $table->uuid('created_by_uuid')->nullable();
-                $table->uuid('updated_by_uuid')->nullable();
-                $table->uuid('warranty_uuid')->nullable();
-                $table->timestamp('last_seen_at')->nullable();
-                $table->softDeletes();
-                $table->timestamps();
-                // Don't add FKs yet - will be added after ensuring prerequisites
-            });
-        }
+        echo "\n🔧 TELEMATICS MIGRATION: Checking for existing table...\n";
 
-        // Step 2: Add UNIQUE index on uuid column (required for FKs from assets, etc.)
+        // If table exists, drop it first to ensure clean state with UNIQUE on uuid
         if (Schema::hasTable('telematics')) {
-            Schema::table('telematics', function (Blueprint $table) {
-                // Check for uuid UNIQUE index
-                $uuidIndexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'uuid' AND Non_unique = 0");
-                if (empty($uuidIndexes)) {
-                    try {
-                        // CRITICAL: Must be UNIQUE, not just indexed, for FK constraints
-                        $table->unique('uuid');
-                        echo "✅ Added UNIQUE constraint to telematics.uuid\n";
-                    } catch (\Exception $e) {
-                        // Index might already exist
-                        echo "⚠️  Could not add UNIQUE to telematics.uuid: {$e->getMessage()}\n";
-                    }
-                }
+            echo "⚠️  Found existing 'telematics' table - dropping for clean recreate...\n";
 
-                // Check for company_uuid index
-                $companyIndexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'company_uuid'");
-                if (empty($companyIndexes)) {
-                    try {
-                        $table->index('company_uuid');
-                    } catch (\Exception $e) {
-                        // Index might already exist
-                    }
-                }
-
-                // Check for warranty_uuid index
-                $warrantyIndexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'warranty_uuid'");
-                if (empty($warrantyIndexes)) {
-                    try {
-                        $table->index('warranty_uuid');
-                    } catch (\Exception $e) {
-                        // Index might already exist
-                    }
-                }
-            });
+            try {
+                DB::statement('SET FOREIGN_KEY_CHECKS=0');
+                Schema::dropIfExists('telematics');
+                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+                echo "✅ Dropped existing 'telematics' table\n";
+            } catch (\Exception $e) {
+                echo "❌ Could not drop telematics table: {$e->getMessage()}\n";
+                throw $e;
+            }
         }
+
+        echo "📦 Creating 'telematics' table with UNIQUE uuid constraint...\n";
+
+        // Create table with UNIQUE on uuid from the start
+        Schema::create('telematics', function (Blueprint $table) {
+            $table->increments('id');
+            $table->uuid('uuid')->unique();  // CRITICAL: UNIQUE constraint for FK references
+            $table->string('_key')->nullable()->index();
+            $table->uuid('company_uuid')->index();
+            $table->string('name')->nullable();
+            $table->string('provider')->nullable();
+            $table->string('model')->nullable();
+            $table->string('serial_number')->nullable();
+            $table->string('firmware_version')->nullable();
+            $table->string('status')->default('active');
+            $table->string('imei')->nullable();
+            $table->string('iccid')->nullable();
+            $table->string('imsi')->nullable();
+            $table->string('msisdn')->nullable();
+            $table->string('type')->nullable();
+            $table->json('last_metrics')->nullable();
+            $table->json('config')->nullable();
+            $table->json('meta')->nullable();
+            $table->uuid('created_by_uuid')->nullable();
+            $table->uuid('updated_by_uuid')->nullable();
+            $table->uuid('warranty_uuid')->nullable()->index();
+            $table->timestamp('last_seen_at')->nullable();
+            $table->softDeletes();
+            $table->timestamps();
+            // Don't add FKs yet - will be added after ensuring prerequisites
+        });
+
+        echo "✅ 'telematics' table created with UNIQUE on uuid!\n";
 
         // Step 3: CRITICAL - Ensure warranties.uuid has a UNIQUE constraint
         // The warranties table was just created in the previous migration
