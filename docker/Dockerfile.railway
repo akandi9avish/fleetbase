@@ -136,6 +136,7 @@ COPY --chown=www-data:www-data ./docker/patches/2024_03_25_044537_create_registr
 COPY --chown=www-data:www-data ./docker/patches/2024_08_27_090558_create_directives_table.php /tmp/migration-patch-directives.php
 COPY --chown=www-data:www-data ./docker/patches/2025_08_01_000000_cleanup_failed_2025_tables.php /tmp/migration-cleanup-2025-tables.php
 COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054921_create_telematics_table.php /tmp/migration-patch-telematics.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054922_create_assets_table.php /tmp/migration-patch-assets.php
 COPY --chown=www-data:www-data ./docker/patches/2025_11_03_000000_universal_uuid_unique_index_fix.php /tmp/migration-universal-uuid-fix.php
 
 # Dump autoload
@@ -383,7 +384,22 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migratio
         echo "Migration might not exist yet - skipping"; \
     fi
 
-# CRITICAL FIX #17: Add UNIVERSAL UUID UNIQUE INDEX FIX migration
+# CRITICAL FIX #17: Patch assets table migration to be idempotent
+# This prevents "Table 'assets' already exists" errors when table was partially created
+# NOTE: assets migration is also in fleetops-api!
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2025_08_28_054922_create_assets_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent assets migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-assets.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-assets.php && \
+        echo "✅ Assets migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "Migration might not exist yet - skipping"; \
+    fi
+
+# CRITICAL FIX #18: Add UNIVERSAL UUID UNIQUE INDEX FIX migration
 # This scans the entire database and ensures ALL uuid columns referenced by FKs have UNIQUE constraints
 # This prevents ALL future "Missing unique key for constraint" errors
 RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
