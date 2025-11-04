@@ -128,6 +128,9 @@ COPY --chown=www-data:www-data ./docker/patches/2024_02_04_051200_create_custom_
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090455_create_chat_channels_table.php /tmp/migration-patch-chat-channels.php
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090456_create_chat_participants_table.php /tmp/migration-patch-chat-participants.php
 COPY --chown=www-data:www-data ./docker/patches/2024_04_01_090458_create_chat_messages_table.php /tmp/migration-patch-chat-messages.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_01_000000_cleanup_failed_2025_tables.php /tmp/migration-cleanup-2025-tables.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054921_create_telematics_table.php /tmp/migration-patch-telematics.php
+COPY --chown=www-data:www-data ./docker/patches/2025_08_28_054922_create_assets_table.php /tmp/migration-patch-assets.php
 
 # Dump autoload
 RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
@@ -257,6 +260,43 @@ RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/core-api/migrations/2024_04_
         echo "📂 Searching for migration file..." && \
         find /fleetbase/api/vendor/fleetbase -name "*chat_messages*" 2>/dev/null || true; \
         exit 1; \
+    fi
+
+# CRITICAL FIX: Deploy cleanup migration for 2025 tables
+# This migration drops partially created tables and removes their migration entries
+# so they can be recreated with correct constraints
+RUN MIGRATION_DIR="/fleetbase/api/vendor/fleetbase/core-api/migrations" && \
+    MIGRATION_FILE="$MIGRATION_DIR/2025_08_01_000000_cleanup_failed_2025_tables.php" && \
+    echo "🧹 Deploying cleanup migration for failed 2025 tables..." && \
+    cp /tmp/migration-cleanup-2025-tables.php "$MIGRATION_FILE" && \
+    rm /tmp/migration-cleanup-2025-tables.php && \
+    chown www-data:www-data "$MIGRATION_FILE" && \
+    echo "✅ Cleanup migration deployed successfully at: $MIGRATION_FILE"
+
+# Deploy telematics migration patch (creates telematics with UNIQUE on uuid)
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2025_08_28_054921_create_telematics_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent telematics migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-telematics.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-telematics.php && \
+        echo "✅ Telematics migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "Migration might not exist yet - skipping"; \
+    fi
+
+# Deploy assets migration patch (creates assets with FK to telematics)
+RUN MIGRATION_FILE="/fleetbase/api/vendor/fleetbase/fleetops-api/server/migrations/2025_08_28_054922_create_assets_table.php" && \
+    if [ -f "$MIGRATION_FILE" ]; then \
+        echo "🔧 Applying idempotent assets migration patch..." && \
+        cp "$MIGRATION_FILE" "${MIGRATION_FILE}.original" && \
+        cp /tmp/migration-patch-assets.php "$MIGRATION_FILE" && \
+        rm /tmp/migration-patch-assets.php && \
+        echo "✅ Assets migration patched successfully"; \
+    else \
+        echo "⚠️  Migration file not found at: $MIGRATION_FILE" && \
+        echo "Migration might not exist yet - skipping"; \
     fi
 
 # Setup composer root directory
