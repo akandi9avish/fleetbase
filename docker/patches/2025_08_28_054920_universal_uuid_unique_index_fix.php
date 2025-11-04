@@ -24,6 +24,53 @@ return new class extends Migration {
         echo "\n🔍 UNIVERSAL UUID UNIQUE INDEX FIX\n";
         echo "====================================\n\n";
 
+        // CRITICAL FIX: Explicitly ensure telematics.uuid has UNIQUE constraint
+        // This is needed because assets migration will reference it, but assets doesn't exist yet
+        // so the FK scan below won't detect it
+        if (Schema::hasTable('telematics') && Schema::hasColumn('telematics', 'uuid')) {
+            echo "🔧 Checking telematics.uuid for UNIQUE constraint...\n";
+
+            $hasUnique = DB::select("
+                SELECT COUNT(*) as count
+                FROM information_schema.TABLE_CONSTRAINTS tc
+                JOIN information_schema.KEY_COLUMN_USAGE kcu
+                    ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+                    AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+                WHERE tc.TABLE_SCHEMA = DATABASE()
+                AND tc.TABLE_NAME = 'telematics'
+                AND kcu.COLUMN_NAME = 'uuid'
+                AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE')
+            ");
+
+            if ($hasUnique[0]->count == 0) {
+                echo "⚠️  telematics.uuid lacks UNIQUE constraint - adding now...\n";
+
+                // Drop any existing non-unique indexes first
+                $indexes = DB::select("SHOW INDEX FROM telematics WHERE Column_name = 'uuid' AND Key_name != 'PRIMARY' AND Non_unique = 1");
+                foreach ($indexes as $index) {
+                    try {
+                        DB::statement("DROP INDEX {$index->Key_name} ON telematics");
+                        echo "   Dropped non-unique index: {$index->Key_name}\n";
+                    } catch (\Exception $e) {
+                        echo "   Warning: Could not drop index: {$e->getMessage()}\n";
+                    }
+                }
+
+                // Add UNIQUE constraint
+                try {
+                    DB::statement("ALTER TABLE telematics ADD UNIQUE INDEX telematics_uuid_unique (uuid)");
+                    echo "   ✅ Added UNIQUE constraint to telematics.uuid\n";
+                } catch (\Exception $e) {
+                    echo "   ❌ CRITICAL: Could not add UNIQUE to telematics.uuid: {$e->getMessage()}\n";
+                    throw $e;
+                }
+            } else {
+                echo "✅ telematics.uuid already has UNIQUE constraint\n";
+            }
+        }
+
+        echo "\n";
+
         // Get all foreign key relationships in the database
         $foreignKeys = DB::select("
             SELECT
