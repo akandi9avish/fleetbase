@@ -80,7 +80,7 @@ return new class extends Migration {
 
             // Check if column already has PRIMARY KEY or UNIQUE constraint
             $uniqueIndexes = DB::select("
-                SELECT CONSTRAINT_NAME, CONSTRAINT_TYPE
+                SELECT tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE
                 FROM information_schema.TABLE_CONSTRAINTS tc
                 JOIN information_schema.KEY_COLUMN_USAGE kcu
                     ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
