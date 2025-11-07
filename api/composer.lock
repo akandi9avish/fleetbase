@@ -2350,12 +2350,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/akandi9avish/fleetops.git",
-                "reference": "36ed5586b38fd11f7fe4a7a9c6fe1e6b91a78154"
+                "reference": "08d76bee71dbc5e7851380dfbf3f3072d7b0540a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/akandi9avish/fleetops/zipball/36ed5586b38fd11f7fe4a7a9c6fe1e6b91a78154",
-                "reference": "36ed5586b38fd11f7fe4a7a9c6fe1e6b91a78154",
+                "url": "https://api.github.com/repos/akandi9avish/fleetops/zipball/08d76bee71dbc5e7851380dfbf3f3072d7b0540a",
+                "reference": "08d76bee71dbc5e7851380dfbf3f3072d7b0540a",
                 "shasum": ""
             },
             "require": {
