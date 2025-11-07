@@ -20,10 +20,11 @@ class RouteServiceProvider extends ServiceProvider
                 Route::get(
                     '/health',
                     function (Request $request) {
+                        $startTime = $request->attributes->get('request_start_time', microtime(true));
                         return response()->json(
                             [
                                 'status' => 'ok',
-                                'time' => microtime(true) - $request->attributes->get('request_start_time')
+                                'time' => microtime(true) - $startTime
                             ]
                         );
                     }
