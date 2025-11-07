@@ -2161,12 +2161,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/akandi9avish/core-api.git",
-                "reference": "b9afa692bfa555f72203b71a3ea586633dd64082"
+                "reference": "ef26528247fdadfb1b95637a6cc0d7498b545352"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/akandi9avish/core-api/zipball/b9afa692bfa555f72203b71a3ea586633dd64082",
-                "reference": "b9afa692bfa555f72203b71a3ea586633dd64082",
+                "url": "https://api.github.com/repos/akandi9avish/core-api/zipball/ef26528247fdadfb1b95637a6cc0d7498b545352",
+                "reference": "ef26528247fdadfb1b95637a6cc0d7498b545352",
                 "shasum": ""
             },
             "require": {
@@ -2275,9 +2275,9 @@
                 "logistics platform"
             ],
             "support": {
-                "source": "https://github.com/akandi9avish/core-api/tree/main"
+                "source": "https://github.com/akandi9avish/core-api/tree/fix-permissions-uuid-primary"
             },
-            "time": "2025-11-07T16:21:14+00:00"
+            "time": "2025-11-07T17:19:40+00:00"
         },
         {
             "name": "fleetbase/countries",
