@@ -140,5 +140,5 @@ ENTRYPOINT ["docker-php-entrypoint"]
 
 # Start command: Run migrations with isolation lock, optimize, and start Octane
 # --isolated flag prevents concurrent migration execution using Redis atomic locks
-# Set default APP_URL if not provided to prevent "Invalid URI: Host is malformed" error
-CMD ["sh", "-c", "export APP_URL=${APP_URL:-http://localhost:8000} && php artisan migrate --force --isolated && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]
+# Construct APP_URL from RAILWAY_PUBLIC_DOMAIN or Railway's static outbound proxy domain if available
+CMD ["sh", "-c", "if [ -n \"$RAILWAY_PUBLIC_DOMAIN\" ]; then export APP_URL=\"https://$RAILWAY_PUBLIC_DOMAIN\"; elif [ -n \"$RAILWAY_STATIC_URL\" ]; then export APP_URL=\"$RAILWAY_STATIC_URL\"; else export APP_URL=\"http://localhost:8000\"; fi && php artisan migrate --force --isolated && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --port=8000 --host=0.0.0.0"]
