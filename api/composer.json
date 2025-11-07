@@ -20,10 +20,10 @@
     "require": {
         "php": "^8.0",
         "appstract/laravel-opcache": "^4.0",
-        "fleetbase/core-api": "^1.6.22",
-        "fleetbase/fleetops-api": "^0.6.23",
-        "fleetbase/registry-bridge": "^0.1.0",
-        "fleetbase/storefront-api": "^0.4.4",
+        "fleetbase/core-api": "dev-main",
+        "fleetbase/fleetops-api": "dev-main",
+        "fleetbase/registry-bridge": "dev-main",
+        "fleetbase/storefront-api": "dev-main",
         "guzzlehttp/guzzle": "^7.0.1",
         "laravel/framework": "^10.0",
         "laravel/octane": "^2.3",
@@ -50,8 +50,20 @@
     },
     "repositories": [
         {
-            "type": "composer",
-            "url": "https://registry.fleetbase.io"
+            "type": "vcs",
+            "url": "https://github.com/akandi9avish/core-api"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/akandi9avish/fleetops"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/akandi9avish/registry-bridge"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/akandi9avish/storefront"
         }
     ],
     "autoload": {
