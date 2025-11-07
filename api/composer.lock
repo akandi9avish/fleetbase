@@ -2161,12 +2161,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/akandi9avish/core-api.git",
-                "reference": "577aac6240bf29b0735373b85328083f9d951e5c"
+                "reference": "c2c0f76e24f1aeb0e38d085ebe7288a7191bb6e6"
             },
             "dist": {
                 "type": "zip",
                 "url": "https://api.github.com/repos/akandi9avish/core-api/zipball/577aac6240bf29b0735373b85328083f9d951e5c",
-                "reference": "577aac6240bf29b0735373b85328083f9d951e5c",
+                "reference": "c2c0f76e24f1aeb0e38d085ebe7288a7191bb6e6",
                 "shasum": ""
             },
             "require": {
@@ -2529,12 +2529,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/akandi9avish/registry-bridge.git",
-                "reference": "07452ae7a57d7cea7b336b5f93f52925f2e69c83"
+                "reference": "cdd4141fadc0f5d1ab42824f93b06c42db3f0401"
             },
             "dist": {
                 "type": "zip",
                 "url": "https://api.github.com/repos/akandi9avish/registry-bridge/zipball/07452ae7a57d7cea7b336b5f93f52925f2e69c83",
-                "reference": "07452ae7a57d7cea7b336b5f93f52925f2e69c83",
+                "reference": "cdd4141fadc0f5d1ab42824f93b06c42db3f0401",
                 "shasum": ""
             },
             "require": {
