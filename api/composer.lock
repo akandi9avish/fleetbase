@@ -2350,12 +2350,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/akandi9avish/fleetops.git",
-                "reference": "01bdca363ccba4e3c46e7d3995aeb8c3a9e6eab6"
+                "reference": "af604a7e205edd1dd9660e7a8c6ce75606b8d77d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/akandi9avish/fleetops/zipball/01bdca363ccba4e3c46e7d3995aeb8c3a9e6eab6",
-                "reference": "01bdca363ccba4e3c46e7d3995aeb8c3a9e6eab6",
+                "url": "https://api.github.com/repos/akandi9avish/fleetops/zipball/af604a7e205edd1dd9660e7a8c6ce75606b8d77d",
+                "reference": "af604a7e205edd1dd9660e7a8c6ce75606b8d77d",
                 "shasum": ""
             },
             "require": {
@@ -2455,7 +2455,7 @@
             "support": {
                 "source": "https://github.com/akandi9avish/fleetops/tree/main"
             },
-            "time": "2025-11-07T16:21:21+00:00"
+            "time": "2025-11-07T17:39:10+00:00"
         },
         {
             "name": "fleetbase/laravel-mysql-spatial",
