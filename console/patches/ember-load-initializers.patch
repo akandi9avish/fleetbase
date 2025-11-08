@@ -1,0 +1,23 @@
+diff --git a/addon/index.ts b/addon/index.ts
+index 99a6ef4f9e0ee49e2ec7e9db75f58bc8e005d564..a515c070132825bbbc7243275117030fe9c122cf 100644
+--- a/addon/index.ts
++++ b/addon/index.ts
+@@ -29,8 +29,17 @@ function registerInitializers(app: typeof Engine, moduleNames: string[]) {
+ }
+ 
+ function registerInstanceInitializers(app: typeof Engine, moduleNames: string[]) {
++  console.log('[DEBUG] Registering instance initializers:', moduleNames);
+   for (var i = 0; i < moduleNames.length; i++) {
+-    app.instanceInitializer(resolveInitializer(moduleNames[i]));
++    console.log('[DEBUG] Processing module:', moduleNames[i]);
++    try {
++      var resolved = resolveInitializer(moduleNames[i]);
++      console.log('[DEBUG] Resolved initializer:', resolved);
++      app.instanceInitializer(resolved);
++    } catch (e) {
++      console.error('[DEBUG] Failed to resolve module:', moduleNames[i], e);
++      throw e;
++    }
+   }
+ }
+ 

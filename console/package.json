@@ -146,6 +146,9 @@
             "@fleetbase/ember-core": "latest",
             "@fleetbase/ember-ui": "latest",
             "@fleetbase/fleetops-data": "latest"
+        },
+        "patchedDependencies": {
+            "ember-load-initializers": "patches/ember-load-initializers.patch"
         }
     },
     "prettier": {
