@@ -4,7 +4,6 @@ const path = require('path');
 const recast = require('recast');
 const babelParser = require('recast/parsers/babel');
 const builders = recast.types.builders;
-
 function getExtensionMountPath(extensionName) {
     let extensionNameSegments = extensionName.split('/');
     let mountName = extensionNameSegments[1];
