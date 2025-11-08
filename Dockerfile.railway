@@ -81,11 +81,10 @@ ENV PNPM_HOME=/root/.pnpm
 ENV PATH=/root/.pnpm/bin:$PATH
 
 # Set build ENV variables
+# Note: CACHE_DRIVER, QUEUE_CONNECTION, etc. should be set via Railway environment variables
+# These are just fallback defaults - Railway env vars will override them
 ENV LOG_CHANNEL=stderr
-ENV CACHE_DRIVER=file
 ENV BROADCAST_DRIVER=log
-ENV QUEUE_CONNECTION=sync
-ENV SESSION_DRIVER=file
 ENV CADDYFILE_PATH=/fleetbase/Caddyfile
 ENV CONSOLE_PATH=/fleetbase/console
 ENV OCTANE_SERVER=frankenphp

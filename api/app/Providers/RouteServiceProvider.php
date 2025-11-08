@@ -17,6 +17,19 @@ class RouteServiceProvider extends ServiceProvider
     {
         $this->routes(
             function () {
+                // Root route - Railway healthcheck fallback
+                Route::get(
+                    '/',
+                    function () {
+                        return response()->json([
+                            'status' => 'ok',
+                            'service' => 'fleetbase-api',
+                            'version' => config('app.version', '0.7.15')
+                        ]);
+                    }
+                );
+
+                // Health check route - Docker HEALTHCHECK and Railway
                 Route::get(
                     '/health',
                     function (Request $request) {
