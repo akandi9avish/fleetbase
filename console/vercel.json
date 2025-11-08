@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install && pnpm run build --environment=production",
+  "buildCommand": "pnpm install && pnpm build --environment=production",
   "outputDirectory": "dist",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
