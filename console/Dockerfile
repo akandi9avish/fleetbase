@@ -20,8 +20,7 @@ COPY package.json pnpm-lock.yaml ./
 # Copy over .npmrc if applicable
 COPY .npmr[c] ./
 
-# Copy patches directory for pnpm patch support
-COPY patches ./patches
+# Note: patches directory removed - using GitHub fork with fixes instead
 
 # Install global dependencies
 RUN npm install -g ember-cli pnpm 
