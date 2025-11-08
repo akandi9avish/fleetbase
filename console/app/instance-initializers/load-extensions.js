@@ -7,5 +7,6 @@ export function initialize(application) {
 }
 
 export default {
+    name: 'load-extensions',
     initialize,
 };

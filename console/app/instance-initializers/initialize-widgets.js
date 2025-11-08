@@ -32,5 +32,6 @@ export function initialize(application) {
 }
 
 export default {
+    name: 'initialize-widgets',
     initialize,
 };
