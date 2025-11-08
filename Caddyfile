@@ -5,7 +5,7 @@
 	order php_server before file_server
 }
 
-http://:8000 {
+:{$PORT:8000} {
 	root * /fleetbase/api/public
 	encode zstd br gzip
 	php_server {
