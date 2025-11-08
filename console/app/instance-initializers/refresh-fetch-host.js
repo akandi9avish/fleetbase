@@ -25,6 +25,5 @@ export function initialize(appInstance) {
 
 export default {
     name: 'refresh-fetch-host',
-    after: 'ember-simple-auth',
     initialize
 };
