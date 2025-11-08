@@ -82,9 +82,10 @@ ENV PATH=/root/.pnpm/bin:$PATH
 
 # Set build ENV variables
 ENV LOG_CHANNEL=stderr
-ENV CACHE_DRIVER=redis
-ENV BROADCAST_DRIVER=socketcluster
-ENV QUEUE_CONNECTION=redis
+ENV CACHE_DRIVER=file
+ENV BROADCAST_DRIVER=log
+ENV QUEUE_CONNECTION=sync
+ENV SESSION_DRIVER=file
 ENV CADDYFILE_PATH=/fleetbase/Caddyfile
 ENV CONSOLE_PATH=/fleetbase/console
 ENV OCTANE_SERVER=frankenphp
