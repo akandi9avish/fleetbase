@@ -1,0 +1,34 @@
+diff --git a/.gitattributes b/.gitattributes
+deleted file mode 100644
+index 7b50fc81ddfc8e56259096f7cb2b3e05da28dd87..0000000000000000000000000000000000000000
+diff --git a/README.md b/README.md
+deleted file mode 100644
+index ee5f77cb29d7e0fe42d412d20092be41a42f4b67..0000000000000000000000000000000000000000
+diff --git a/addon/instance-initializers/register-leaflet-draw-control-layer.js b/addon/instance-initializers/register-leaflet-draw-control-layer.js
+index 61ae37e1ca5bf1f1c16a9c815ad1748970e00824..fac755246fb52ead9332d72b0ce542ef2347b2ec 100644
+--- a/addon/instance-initializers/register-leaflet-draw-control-layer.js
++++ b/addon/instance-initializers/register-leaflet-draw-control-layer.js
+@@ -13,5 +13,6 @@ export function initialize(owner) {
+ }
+ 
+ export default {
++    name: 'register-leaflet-draw-control-layer',
+     initialize,
+ };
+diff --git a/addon/instance-initializers/register-leaflet-tracking-marker.js b/addon/instance-initializers/register-leaflet-tracking-marker.js
+index 6dbfbe27870494404330ff0e6f042eb6cd5d7f6b..8f67677bf643d247560fb0b8d5be8ca805ca5492 100644
+--- a/addon/instance-initializers/register-leaflet-tracking-marker.js
++++ b/addon/instance-initializers/register-leaflet-tracking-marker.js
+@@ -13,5 +13,6 @@ export function initialize(owner) {
+ }
+ 
+ export default {
++    name: 'register-leaflet-tracking-marker',
+     initialize,
+ };
+diff --git a/phpstan.neon.dist b/phpstan.neon.dist
+deleted file mode 100644
+index 082eb27a3fd798762b1e3e551273af98fee57940..0000000000000000000000000000000000000000
+diff --git a/phpunit.xml.dist b/phpunit.xml.dist
+deleted file mode 100644
+index 548c414901cfcba6b37fbc4ff86c7b4ed29ec0de..0000000000000000000000000000000000000000
