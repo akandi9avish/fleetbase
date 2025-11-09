@@ -25,17 +25,7 @@ export default class ConsoleRoute extends Route {
         this.universe.callHooks('console:before-model', this.session, this.router, transition);
 
         if (this.session.isAuthenticated) {
-            // Temporarily commented out to debug auth issue
-            // The promiseCurrentUser() call is invalidating the session if user loading fails
-            // return this.session.promiseCurrentUser(transition);
-
-            // Instead, try to load user without invalidating session on failure
-            try {
-                await this.currentUser.promiseUser();
-            } catch (error) {
-                console.error('[CONSOLE ROUTE] Failed to load user:', error);
-                // Don't invalidate session - let the user see the dashboard even if user loading fails
-            }
+            return this.session.promiseCurrentUser(transition);
         }
     }
 
