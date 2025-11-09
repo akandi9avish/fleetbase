@@ -25,20 +25,7 @@ export default class ConsoleRoute extends Route {
         this.universe.callHooks('console:before-model', this.session, this.router, transition);
 
         if (this.session.isAuthenticated) {
-            try {
-                return await this.session.promiseCurrentUser(transition);
-            } catch (error) {
-                // Log the error but don't invalidate the session
-                // This allows users to access the dashboard even if user data loading fails
-                console.warn('[CONSOLE ROUTE] User loading failed, but keeping session active:', error);
-
-                // Try to load user directly from currentUser service as fallback
-                try {
-                    await this.currentUser.promiseUser();
-                } catch (fallbackError) {
-                    console.warn('[CONSOLE ROUTE] Fallback user loading also failed:', fallbackError);
-                }
-            }
+            return await this.session.promiseCurrentUser(transition);
         }
     }
 

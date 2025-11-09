@@ -1,26 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting Fleetbase API deployment..."
+echo "🚀 Starting Fleetbase API deployment for Railway..."
+echo "ℹ️  Railway MySQL plugin handles database creation automatically"
 
-# Wait for database to be ready
-echo "⏳ Waiting for database connection..."
-max_attempts=30
-attempt=0
-until php artisan mysql:createdb 2>/dev/null || [ $attempt -eq $max_attempts ]; do
-  echo "Database not ready, waiting... (attempt $((attempt+1))/$max_attempts)"
-  sleep 2
-  attempt=$((attempt+1))
-done
-
-if [ $attempt -eq $max_attempts ]; then
-  echo "❌ Database connection failed after $max_attempts attempts"
-  exit 1
-fi
-
-# Run migrations
+# Run migrations with isolation lock (prevents concurrent migrations in multi-service setup)
 echo "📦 Running migrations..."
-php artisan migrate --force
+php artisan migrate --force --isolated
 
 # Run sandbox migrations
 echo "📦 Running sandbox migrations..."

@@ -119,14 +119,18 @@ RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoload
 # Setup application
 COPY --chown=www-data:www-data ./api /fleetbase/api
 
+# Copy Railway initialization script
+COPY --chown=www-data:www-data ./railway/init-api.sh /fleetbase/api/railway-init.sh
+
 # Copy migration patches
 RUN mkdir -p /fleetbase/api/storage/logs/ && touch /fleetbase/api/storage/logs/laravel-$(date +'%Y-%m-%d').log
 RUN chown -R www-data:www-data /fleetbase/api/storage
 RUN chmod -R 775 /fleetbase/api/storage
 RUN chmod -R 775 /fleetbase/api/bootstrap/cache
 
-# Set permissions for deploy script if it exists
+# Set permissions for deployment scripts
 RUN if [ -f /fleetbase/api/deploy.sh ]; then chmod +x /fleetbase/api/deploy.sh; fi
+RUN chmod +x /fleetbase/api/railway-init.sh
 
 # Expose port
 EXPOSE 8000
@@ -138,8 +142,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=360s --retries=3 \
 # CRITICAL: Use standard docker-php-entrypoint instead of ssm-parent
 ENTRYPOINT ["docker-php-entrypoint"]
 
-# Start command: Run migrations with isolation lock, optimize, and start Octane
-# --isolated flag prevents concurrent migration execution using Redis atomic locks
+# Start command: Run Railway initialization script and start Octane
+# Railway init script handles: migrations, permissions, queue restart, registry init, and cache optimization
 # Use Railway's PORT environment variable (defaults to 8000 for local development)
 # Construct APP_URL from RAILWAY_PUBLIC_DOMAIN or Railway's static outbound proxy domain if available
-CMD ["sh", "-c", "PORT=${PORT:-8000} && if [ -n \"$RAILWAY_PUBLIC_DOMAIN\" ]; then export APP_URL=\"https://$RAILWAY_PUBLIC_DOMAIN\"; elif [ -n \"$RAILWAY_STATIC_URL\" ]; then export APP_URL=\"$RAILWAY_STATIC_URL\"; else export APP_URL=\"http://localhost:$PORT\"; fi && php artisan migrate --force --isolated && php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan octane:frankenphp --max-requests=250 --caddyfile=/fleetbase/Caddyfile --host=0.0.0.0"]
+CMD ["sh", "-c", "PORT=${PORT:-8000} && if [ -n \"$RAILWAY_PUBLIC_DOMAIN\" ]; then export APP_URL=\"https://$RAILWAY_PUBLIC_DOMAIN\"; elif [ -n \"$RAILWAY_STATIC_URL\" ]; then export APP_URL=\"$RAILWAY_STATIC_URL\"; else export APP_URL=\"http://localhost:$PORT\"; fi && ./railway-init.sh && php artisan octane:frankenphp --max-requests=250 --caddyfile=/fleetbase/Caddyfile --host=0.0.0.0 --port=$PORT"]
