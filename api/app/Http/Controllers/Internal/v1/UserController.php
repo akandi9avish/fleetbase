@@ -29,12 +29,24 @@ class UserController extends BaseUserController
     public function createRecord(\Illuminate\Http\Request $request)
     {
         try {
-            $record = $this->model->createRecordFromRequest(
-                $request,
-                null, // No onBefore callback needed - base controller handles everything
-                function (&$request, &$user) {
-                    // Set password explicitly (it's guarded from mass assignment)
-                    if ($request->filled('user.password')) {
+            // Call parent's createRecord to leverage ALL base functionality
+            // This ensures username generation, timezone handling, and all other
+            // standard Fleetbase user creation logic runs properly
+            $record = parent::createRecord($request);
+
+            // After parent creates the user, set password if provided
+            // (password is guarded from mass assignment, so parent can't set it)
+            if ($request->filled('user.password')) {
+                // Extract user from parent's response
+                $userData = $record instanceof \Illuminate\Http\JsonResponse
+                    ? $record->getData(true)
+                    : $record;
+
+                if (isset($userData['user'])) {
+                    $userId = $userData['user']['uuid'] ?? $userData['user']['id'];
+                    $user = \Fleetbase\Models\User::where('uuid', $userId)->first();
+
+                    if ($user) {
                         $user->password = $request->input('user.password');
                         $user->save();
 
@@ -43,9 +55,9 @@ class UserController extends BaseUserController
                         ]);
                     }
                 }
-            );
+            }
 
-            return response()->json($record);
+            return $record;
         } catch (\Exception $e) {
             Log::error("❌ Failed to create user", [
                 'error' => $e->getMessage(),
