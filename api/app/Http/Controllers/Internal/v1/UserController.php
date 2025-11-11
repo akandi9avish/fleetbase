@@ -31,6 +31,16 @@ class UserController extends BaseUserController
                     'type' => $request->input('user.type', 'user'),
                 ]));
             }, function (&$request, &$user) {
+                // Set password explicitly (it's guarded from mass assignment)
+                if ($request->filled('user.password')) {
+                    $user->password = $request->input('user.password');
+                    $user->save();
+
+                    Log::info("✅ Set password for user", [
+                        'user_email' => $user->email
+                    ]);
+                }
+
                 // Get company from session (may be null in Railway internal networking)
                 $company = Auth::getCompany();
 
