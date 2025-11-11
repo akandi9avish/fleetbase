@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Internal\v1;
 
 use Fleetbase\Http\Controllers\Internal\v1\UserController as BaseUserController;
 use Fleetbase\Models\Company;
-use Illuminate\Support\Facades\Auth;
+use Fleetbase\Support\Auth;
 use Illuminate\Support\Facades\Log;
 
 /**
