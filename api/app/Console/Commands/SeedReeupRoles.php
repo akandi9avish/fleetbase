@@ -167,7 +167,7 @@ class SeedReeupRoles extends Command
                         ->first();
 
                     if ($policy) {
-                        $role->attachPolicy($policy);
+                        $role->assignPolicy($policy);
                     }
                 }
 
