@@ -20,6 +20,10 @@ php artisan fleetbase:seed || echo "⚠️  Seeding skipped (may already be seed
 echo "🔐 Creating permissions, policies, and roles..."
 php artisan fleetbase:create-permissions
 
+# Seed REEUP custom roles
+echo "🌱 Seeding REEUP custom IAM roles..."
+php artisan reeup:seed-roles || echo "⚠️  REEUP roles seeding failed (may need manual intervention)"
+
 # Restart queue workers
 echo "🔄 Restarting queue workers..."
 php artisan queue:restart
