@@ -27,35 +27,45 @@ class InjectCompanyFromPayload
      */
     public function handle(Request $request, Closure $next)
     {
-        // Only process if session doesn't already have company context
-        if (!session()->has('company')) {
-            // Check for company_uuid in various payload locations
-            $companyUuid = $request->input('user.company_uuid')
-                        ?? $request->input('company_uuid')
-                        ?? $request->header('X-Company-UUID');
+        // Check for company_uuid in various payload locations
+        $companyUuid = $request->input('user.company_uuid')
+                    ?? $request->input('company_uuid')
+                    ?? $request->header('X-Company-UUID');
 
-            if ($companyUuid) {
-                // Verify company exists
-                $company = Company::where('uuid', $companyUuid)->first();
+        if ($companyUuid) {
+            // Verify company exists
+            $company = Company::where('uuid', $companyUuid)->first();
 
-                if ($company) {
-                    // Inject into session
-                    session(['company' => $companyUuid]);
+            if ($company) {
+                // Store company object in request attributes so it's available throughout request lifecycle
+                $request->attributes->set('injected_company', $company);
+                $request->attributes->set('injected_company_uuid', $companyUuid);
 
-                    Log::info("✅ Injected company context into session", [
-                        'company_uuid' => $companyUuid,
-                        'company_name' => $company->name,
-                        'endpoint' => $request->path()
-                    ]);
-                } else {
-                    Log::warning("⚠️  Invalid company_uuid in payload", [
-                        'company_uuid' => $companyUuid,
-                        'endpoint' => $request->path()
-                    ]);
-                }
+                Log::info("✅ Injected company context into request", [
+                    'company_uuid' => $companyUuid,
+                    'company_name' => $company->name,
+                    'endpoint' => $request->path()
+                ]);
+            } else {
+                Log::warning("⚠️  Invalid company_uuid in payload", [
+                    'company_uuid' => $companyUuid,
+                    'endpoint' => $request->path()
+                ]);
             }
         }
 
-        return $next($request);
+        // Continue with the request - session will be started by subsequent middleware
+        $response = $next($request);
+
+        // AFTER the request has been processed and session is available,
+        // inject company into session for subsequent requests
+        if ($companyUuid && session()->isStarted() && !session()->has('company')) {
+            session(['company' => $companyUuid]);
+            Log::info("✅ Persisted company context to session", [
+                'company_uuid' => $companyUuid
+            ]);
+        }
+
+        return $response;
     }
 }
