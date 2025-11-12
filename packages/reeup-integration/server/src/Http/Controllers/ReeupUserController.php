@@ -103,6 +103,23 @@ class ReeupUserController extends FleetbaseController
 
                         if (auth()->attempt($credentials)) {
                             $token = auth()->user()->createToken('api-token')->plainTextToken;
+                            Log::info("✅ [REEUP] Existing user authenticated successfully");
+                        } else {
+                            // Password mismatch - reset the user's password
+                            Log::warning("⚠️  [REEUP] Password mismatch for existing user, resetting password");
+                            $existingUser->password = Hash::make($userData['password']);
+                            $existingUser->save();
+                            $existingUser->refresh();
+
+                            Log::info("✅ [REEUP] Password reset complete, attempting authentication");
+
+                            // Try authentication again with new password
+                            if (auth()->attempt($credentials)) {
+                                $token = auth()->user()->createToken('api-token')->plainTextToken;
+                                Log::info("✅ [REEUP] Authentication successful with new password");
+                            } else {
+                                Log::error("❌ [REEUP] Authentication still failed after password reset");
+                            }
                         }
                     }
                 } catch (\Exception $e) {
