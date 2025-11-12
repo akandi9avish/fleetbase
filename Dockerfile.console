@@ -40,10 +40,13 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 COPY console/ .
 
 # Build the Ember.js application for production
+# Note: The build script runs "ember build" which defaults to development
+# We need to set NODE_ENV and pass --environment production to Ember CLI
+ENV NODE_ENV=production
 RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm run build --environment=production; \
+      pnpm run build -- --environment production; \
     else \
-      npm run build -- --environment=production; \
+      npm run build -- --environment production; \
     fi
 
 # Production stage - use nginx to serve static files
