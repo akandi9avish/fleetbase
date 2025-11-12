@@ -38,8 +38,10 @@ RUN pnpm install
 # Copy the console directory contents into the container at /console
 COPY . .
 
-# Build the application
-RUN pnpm build --environment $ENVIRONMENT
+# Build the application for production
+# Note: Must use double dash (--) to pass flags through to ember build
+ENV NODE_ENV=production
+RUN pnpm build -- --environment production
 
 # ---- Serve Stage ----
 FROM nginx:alpine
@@ -47,11 +49,11 @@ FROM nginx:alpine
 # Copy the built app to our served directory
 COPY --from=builder /console/dist /usr/share/nginx/html
 
-# Expose the port nginx is bound to
-EXPOSE 4200
-
-# Use custom nginx.conf
+# Use custom nginx.conf with iframe embedding headers
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 4200
+EXPOSE 4200
 
 # Start Nginx server
 CMD ["nginx", "-g", "daemon off;"]
