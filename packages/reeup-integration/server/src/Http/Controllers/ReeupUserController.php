@@ -44,18 +44,17 @@ class ReeupUserController extends FleetbaseController
             $userData = $request->input('user', []);
 
             // Relaxed validation rules (no ExcludedWords, flexible name format)
+            // NOTE: Unique constraints removed for email/phone - we handle duplicates gracefully below
             $validator = Validator::make($userData, [
                 'name' => ['required', 'string', 'min:2', 'max:100'],
                 'email' => [
                     'required',
-                    'email',
-                    Rule::unique('users', 'email')->whereNull('deleted_at')
+                    'email'
                 ],
                 'phone' => [
                     'sometimes',
                     'nullable',
-                    'regex:/^\+[0-9]+$/',
-                    Rule::unique('users', 'phone')->whereNull('deleted_at')
+                    'regex:/^\+[0-9]+$/'
                 ],
                 'password' => [
                     'required',
