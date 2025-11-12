@@ -134,7 +134,7 @@ class ReeupUserController extends FleetbaseController
             // Generate username
             $username = Str::slug($userData['name'] . '_' . Str::random(4), '_');
 
-            // Create user
+            // Create user (WITHOUT password - will set it after all other operations)
             $user = User::create([
                 'company_uuid' => $company->uuid,
                 'name' => $userData['name'],
@@ -143,18 +143,15 @@ class ReeupUserController extends FleetbaseController
                 'phone' => $userData['phone'] ?? null,
                 'timezone' => $userData['timezone'] ?? date_default_timezone_get(),
                 'ip_address' => $request->ip(),
-                'status' => 'active',
-                'type' => $userData['type'] ?? 'user'
+                'status' => 'active'
+                // NOTE: 'type' is guarded, set via setUserType() below
+                // NOTE: 'password' is guarded, set after all operations to prevent being overwritten
             ]);
 
-            // Set password (it's guarded from mass assignment)
-            $user->password = Hash::make($userData['password']);
-            $user->save();
-
-            // Set user type
+            // Set user type (calls save() internally)
             $user->setUserType($userData['type'] ?? 'user');
 
-            // Assign to company
+            // Assign to company (calls save() internally)
             $roleUuid = $userData['role_uuid'] ?? null;
             $user->assignCompany($company, $roleUuid);
 
@@ -163,10 +160,26 @@ class ReeupUserController extends FleetbaseController
                 $user->assignSingleRole($roleUuid);
             }
 
-            Log::info("✅ [REEUP] User created successfully", [
+            // CRITICAL: Set password AFTER all other operations to prevent it being overwritten
+            // Multiple save() calls from setUserType() and assignCompany() can cause password to be lost
+            $user->password = Hash::make($userData['password']);
+            $user->save();
+
+            // Verify password was saved by reloading from database
+            $user->refresh();
+            if (empty($user->password)) {
+                Log::error("❌ [REEUP] Password was not saved to database!", [
+                    'user_uuid' => $user->uuid,
+                    'email' => $user->email
+                ]);
+                throw new \Exception('Failed to save user password');
+            }
+
+            Log::info("✅ [REEUP] User created successfully with password", [
                 'user_uuid' => $user->uuid,
                 'email' => $user->email,
-                'company_uuid' => $company->uuid
+                'company_uuid' => $company->uuid,
+                'password_saved' => !empty($user->password)
             ]);
 
             // Create API token
