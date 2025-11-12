@@ -106,20 +106,17 @@ export default class ApplicationRoute extends Route {
                     await this.session.manuallyAuthenticate(token);
                     console.log('[REEUP] ✅ Successfully authenticated with token');
 
-                    // Notify parent of success BEFORE reload
+                    // Transition to console route to trigger full authentication flow
+                    console.log('[REEUP] Transitioning to console...');
+                    await this.router.transitionTo('console');
+
+                    // Notify parent of success AFTER navigation completes
                     if (window.parent !== window) {
                         window.parent.postMessage({
                             type: 'REEUP_FLEETBASE_AUTH_SUCCESS',
                             email
                         }, event.origin);
                     }
-
-                    // Reload the page to complete authentication (same as impersonation feature)
-                    // This is required for Fleetbase Console to fully load the authenticated session
-                    console.log('[REEUP] Reloading console to complete authentication...');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 300);
                 } catch (error) {
                     console.error('[REEUP] ❌ Token authentication failed:', error);
 
