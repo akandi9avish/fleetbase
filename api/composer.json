@@ -24,6 +24,7 @@
         "fleetbase/fleetops-api": "dev-main",
         "fleetbase/registry-bridge": "dev-main",
         "fleetbase/storefront-api": "dev-main",
+        "reeup/integration": "*",
         "guzzlehttp/guzzle": "^7.0.1",
         "laravel/framework": "^10.0",
         "laravel/octane": "^2.3",
@@ -64,6 +65,10 @@
         {
             "type": "vcs",
             "url": "https://github.com/akandi9avish/storefront"
+        },
+        {
+            "type": "path",
+            "url": "../packages/reeup-integration"
         }
     ],
     "autoload": {

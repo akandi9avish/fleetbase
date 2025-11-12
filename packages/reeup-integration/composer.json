@@ -1,0 +1,37 @@
+{
+    "name": "reeup/integration",
+    "version": "1.0.0",
+    "description": "REEUP Integration Extension for Fleetbase - Cannabis Retail Platform",
+    "keywords": [
+        "fleetbase-extension",
+        "reeup",
+        "cannabis",
+        "retail",
+        "integration"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "REEUP",
+            "email": "tech@reeup.co"
+        }
+    ],
+    "require": {
+        "php": "^8.0",
+        "fleetbase/core-api": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Reeup\\Integration\\": "server/src/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Reeup\\Integration\\Providers\\ReeupIntegrationServiceProvider"
+            ]
+        }
+    }
+}

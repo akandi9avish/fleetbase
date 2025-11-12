@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Console\Commands;
+namespace Reeup\Integration\Console\Commands;
 
-use App\Auth\Schemas\Reeup as ReeupAuthSchema;
+use Reeup\Integration\Auth\Schemas\Reeup as ReeupAuthSchema;
 use Fleetbase\Models\Permission;
 use Fleetbase\Models\Policy;
 use Fleetbase\Models\Role;

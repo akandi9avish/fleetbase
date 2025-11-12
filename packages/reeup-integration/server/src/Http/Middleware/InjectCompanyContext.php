@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Middleware;
+namespace Reeup\Integration\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  * When company_uuid is provided in the request payload (e.g., user.company_uuid),
  * this middleware sets it in the session before the controller processes the request.
  */
-class InjectCompanyFromPayload
+class InjectCompanyContext
 {
     /**
      * Handle an incoming request.
@@ -49,20 +49,20 @@ class InjectCompanyFromPayload
                 // This ensures Auth::getCompany() returns correct company DURING request processing
                 if (session()->isStarted()) {
                     session(['company' => $companyUuid]);
-                    Log::info("✅ Set session company BEFORE controller", [
+                    Log::info("✅ [REEUP] Set session company BEFORE controller", [
                         'company_uuid' => $companyUuid,
                         'company_name' => $company->name,
                         'endpoint' => $request->path()
                     ]);
                 } else {
-                    Log::info("✅ Injected company context (session not started, using request fallback)", [
+                    Log::info("✅ [REEUP] Injected company context (session not started, using request fallback)", [
                         'company_uuid' => $companyUuid,
                         'company_name' => $company->name,
                         'endpoint' => $request->path()
                     ]);
                 }
             } else {
-                Log::warning("⚠️  Invalid company_uuid in payload", [
+                Log::warning("⚠️  [REEUP] Invalid company_uuid in payload", [
                     'company_uuid' => $companyUuid,
                     'endpoint' => $request->path()
                 ]);
@@ -75,7 +75,7 @@ class InjectCompanyFromPayload
         // AFTER the request has been processed, ensure session has company for subsequent requests
         if ($companyUuid && session()->isStarted() && !session()->has('company')) {
             session(['company' => $companyUuid]);
-            Log::info("✅ Persisted company context to session (post-response)", [
+            Log::info("✅ [REEUP] Persisted company context to session (post-response)", [
                 'company_uuid' => $companyUuid
             ]);
         }

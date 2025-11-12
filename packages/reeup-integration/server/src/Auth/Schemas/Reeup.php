@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Auth\Schemas;
+namespace Reeup\Integration\Auth\Schemas;
 
 /**
  * REEUP Custom IAM Roles Schema
