@@ -59,7 +59,8 @@ export default class ApplicationRoute extends Route {
     async init() {
         super.init(...arguments);
 
-        // REEUP Integration: Setup credential auto-fill authentication
+        // REEUP Integration: Setup token-based authentication
+        console.log('[REEUP] Initializing Fleetbase Console with REEUP integration');
         this.setupREEUPAuthListener();
 
         const { shouldInstall, shouldOnboard, defaultTheme } = await this.checkInstallationStatus();
