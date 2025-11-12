@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Internal\v1;
 
 use Fleetbase\Http\Controllers\Internal\v1\UserController as BaseUserController;
+use Fleetbase\Exceptions\FleetbaseRequestValidationException;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -58,6 +59,13 @@ class UserController extends BaseUserController
             }
 
             return $record;
+        } catch (FleetbaseRequestValidationException $e) {
+            // Return actual validation errors, not generic "Invalid request" message
+            Log::error("❌ User creation validation failed", [
+                'errors' => $e->getErrors(),
+                'payload' => $request->input('user')
+            ]);
+            return response()->error($e->getErrors());
         } catch (\Exception $e) {
             Log::error("❌ Failed to create user", [
                 'error' => $e->getMessage(),
