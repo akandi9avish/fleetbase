@@ -165,7 +165,8 @@ return [
         /*
          * Package Service Providers...
          */
-        
+        \Reeup\Integration\Providers\ReeupIntegrationServiceProvider::class,
+
         /*
          * Application Service Providers...
          */
