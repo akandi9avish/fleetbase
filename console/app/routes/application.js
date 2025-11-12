@@ -76,25 +76,59 @@ export default class ApplicationRoute extends Route {
     }
 
     /**
-     * Setup REEUP postMessage authentication listener for credential auto-fill.
-     * Receives credentials from parent REEUP window and auto-fills the Fleetbase login form.
+     * Setup REEUP postMessage authentication listener for token-based auth.
+     * Receives Sanctum token from parent REEUP window and directly authenticates.
      *
      * @memberof ApplicationRoute
      */
     setupREEUPAuthListener() {
         if (typeof window === 'undefined') return;
 
-        console.log('[REEUP] Setting up credential auto-fill listener');
+        console.log('[REEUP] Setting up token-based authentication listener');
 
         window.addEventListener('message', async (event) => {
             // Security: Only accept messages from configured REEUP origins
             const allowedOrigins = config.reeup?.allowedOrigins || ['http://localhost:3000'];
 
             if (!allowedOrigins.includes(event.origin)) {
+                console.log(`[REEUP] Rejected message from unauthorized origin: ${event.origin}`);
                 return;
             }
 
-            // Handle credential auto-fill
+            // Handle token-based authentication (PREFERRED METHOD)
+            if (event.data.type === 'REEUP_FLEETBASE_TOKEN') {
+                const { token, email } = event.data;
+                console.log('[REEUP] Received Sanctum token for:', email);
+
+                try {
+                    // Use session.manuallyAuthenticate to directly authenticate with token
+                    await this.session.manuallyAuthenticate(token);
+                    console.log('[REEUP] ✅ Successfully authenticated with token');
+
+                    // Notify parent of success
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'REEUP_FLEETBASE_AUTH_SUCCESS',
+                            email
+                        }, event.origin);
+                    }
+
+                    // Navigate to console
+                    await this.router.transitionTo('console');
+                } catch (error) {
+                    console.error('[REEUP] ❌ Token authentication failed:', error);
+
+                    // Notify parent of failure
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'REEUP_FLEETBASE_AUTH_FAILURE',
+                            error: error.message || 'Authentication failed'
+                        }, event.origin);
+                    }
+                }
+            }
+
+            // Handle credential auto-fill (FALLBACK METHOD for backwards compatibility)
             if (event.data.type === 'REEUP_FLEETBASE_CREDENTIALS') {
                 const { email, password } = event.data;
                 console.log('[REEUP] Received credentials for auto-fill:', email);
