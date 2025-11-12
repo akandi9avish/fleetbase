@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "20015ee039439096a8fa696eb8243a1c",
+    "content-hash": "49833416a133f26069034661aae1a46a",
     "packages": [
         {
             "name": "appstract/laravel-opcache",
@@ -9669,6 +9669,30 @@
                 }
             ],
             "time": "2025-04-30T15:16:02+00:00"
+        },
+        {
+            "name": "reeup/integration",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "../packages/reeup-integration",
+                "reference": "c69ae37f1c0d1c2b3e4f5a6b7c8d9e0f1a2b3c4d"
+            },
+            "require": {
+                "php": "^8.0",
+                "fleetbase/core-api": "dev-main"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Reeup\\Integration\\": "server/src/"
+                }
+            },
+            "license": ["AGPL-3.0-or-later"],
+            "description": "REEUP Integration extension for Fleetbase",
+            "transport-options": {
+                "symlink": true
+            }
         },
         {
             "name": "psr/cache",

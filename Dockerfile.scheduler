@@ -92,6 +92,9 @@ WORKDIR /fleetbase/api
 # Prepare composer cache directory
 RUN mkdir -p /var/www/.cache/composer && chown -R www-data:www-data /var/www/.cache/composer
 
+# Copy packages directory (for local extension packages)
+COPY --chown=www-data:www-data ./packages /fleetbase/packages
+
 # Copy composer files
 COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
 
