@@ -41,11 +41,26 @@ class InjectCompanyFromPayload
                 $request->attributes->set('injected_company', $company);
                 $request->attributes->set('injected_company_uuid', $companyUuid);
 
-                Log::info("✅ Injected company context into request", [
-                    'company_uuid' => $companyUuid,
-                    'company_name' => $company->name,
-                    'endpoint' => $request->path()
-                ]);
+                // CRITICAL FIX #1: Add company_uuid to top-level request input
+                // This ensures Auth::getCompany()'s fallback (line 187) finds it via request()->input('company_uuid')
+                $request->merge(['company_uuid' => $companyUuid]);
+
+                // CRITICAL FIX #2: Set session company IMMEDIATELY if session is started
+                // This ensures Auth::getCompany() returns correct company DURING request processing
+                if (session()->isStarted()) {
+                    session(['company' => $companyUuid]);
+                    Log::info("✅ Set session company BEFORE controller", [
+                        'company_uuid' => $companyUuid,
+                        'company_name' => $company->name,
+                        'endpoint' => $request->path()
+                    ]);
+                } else {
+                    Log::info("✅ Injected company context (session not started, using request fallback)", [
+                        'company_uuid' => $companyUuid,
+                        'company_name' => $company->name,
+                        'endpoint' => $request->path()
+                    ]);
+                }
             } else {
                 Log::warning("⚠️  Invalid company_uuid in payload", [
                     'company_uuid' => $companyUuid,
@@ -54,14 +69,13 @@ class InjectCompanyFromPayload
             }
         }
 
-        // Continue with the request - session will be started by subsequent middleware
+        // Continue with the request
         $response = $next($request);
 
-        // AFTER the request has been processed and session is available,
-        // inject company into session for subsequent requests
+        // AFTER the request has been processed, ensure session has company for subsequent requests
         if ($companyUuid && session()->isStarted() && !session()->has('company')) {
             session(['company' => $companyUuid]);
-            Log::info("✅ Persisted company context to session", [
+            Log::info("✅ Persisted company context to session (post-response)", [
                 'company_uuid' => $companyUuid
             ]);
         }
