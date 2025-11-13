@@ -59,9 +59,10 @@ export default class ApplicationRoute extends Route {
     async init() {
         super.init(...arguments);
 
-        // REEUP Integration: Setup token-based authentication
-        console.log('[REEUP] Initializing Fleetbase Console with REEUP integration');
-        this.setupREEUPAuthListener();
+        // REEUP BFF Integration: Authentication handled by BFF proxy
+        // All API calls are proxied through Next.js BFF which injects authentication tokens
+        // No need for postMessage-based authentication anymore
+        console.log('[REEUP] Initializing Fleetbase Console with BFF proxy integration');
 
         const { shouldInstall, shouldOnboard, defaultTheme } = await this.checkInstallationStatus();
 
@@ -73,111 +74,6 @@ export default class ApplicationRoute extends Route {
 
         if (shouldOnboard) {
             return this.router.transitionTo('onboard');
-        }
-    }
-
-    /**
-     * Setup REEUP postMessage authentication listener for token-based auth.
-     * Receives Sanctum token from parent REEUP window and directly authenticates.
-     *
-     * @memberof ApplicationRoute
-     */
-    setupREEUPAuthListener() {
-        if (typeof window === 'undefined') return;
-
-        console.log('[REEUP] Setting up token-based authentication listener');
-
-        window.addEventListener('message', async (event) => {
-            // Security: Only accept messages from configured REEUP origins
-            const allowedOrigins = config.reeup?.allowedOrigins || ['http://localhost:3000'];
-
-            if (!allowedOrigins.includes(event.origin)) {
-                console.log(`[REEUP] Rejected message from unauthorized origin: ${event.origin}`);
-                return;
-            }
-
-            // Handle token-based authentication (PREFERRED METHOD)
-            if (event.data.type === 'REEUP_FLEETBASE_TOKEN') {
-                const { token, email } = event.data;
-                console.log('[REEUP] Received Sanctum token for:', email);
-
-                try {
-                    // Use session.manuallyAuthenticate to directly authenticate with token
-                    await this.session.manuallyAuthenticate(token);
-                    console.log('[REEUP] ✅ Successfully authenticated with token');
-
-                    // Transition to console route to trigger full authentication flow
-                    console.log('[REEUP] Transitioning to console...');
-                    await this.router.transitionTo('console');
-
-                    // Notify parent of success AFTER navigation completes
-                    if (window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'REEUP_FLEETBASE_AUTH_SUCCESS',
-                            email
-                        }, event.origin);
-                    }
-                } catch (error) {
-                    console.error('[REEUP] ❌ Token authentication failed:', error);
-
-                    // Notify parent of failure
-                    if (window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'REEUP_FLEETBASE_AUTH_FAILURE',
-                            error: error.message || 'Authentication failed'
-                        }, event.origin);
-                    }
-                }
-            }
-
-            // Handle credential auto-fill (FALLBACK METHOD for backwards compatibility)
-            if (event.data.type === 'REEUP_FLEETBASE_CREDENTIALS') {
-                const { email, password } = event.data;
-                console.log('[REEUP] Received credentials for auto-fill:', email);
-
-                // Auto-fill login form with retry logic
-                const fillLoginForm = () => {
-                    const emailField = document.querySelector('input[name="email"], input[type="email"]');
-                    const passwordField = document.querySelector('input[name="password"], input[type="password"]');
-
-                    if (emailField && passwordField && email && password) {
-                        console.log('[REEUP] Filling login form');
-
-                        // Fill fields
-                        emailField.value = email;
-                        passwordField.value = password;
-
-                        // Trigger Ember events
-                        emailField.dispatchEvent(new Event('input', { bubbles: true }));
-                        emailField.dispatchEvent(new Event('change', { bubbles: true }));
-                        passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-                        passwordField.dispatchEvent(new Event('change', { bubbles: true }));
-
-                        // Submit after brief delay
-                        setTimeout(() => {
-                            const form = emailField.closest('form');
-                            if (form) {
-                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                                console.log('[REEUP] Form submitted');
-                            }
-                        }, 200);
-                    } else {
-                        // Retry if form not ready
-                        setTimeout(fillLoginForm, 100);
-                    }
-                };
-
-                fillLoginForm();
-            }
-        });
-
-        // Signal ready to parent window
-        if (window.parent !== window) {
-            const allowedOrigins = config.reeup?.allowedOrigins || ['http://localhost:3000'];
-            allowedOrigins.forEach(origin => {
-                window.parent.postMessage({ type: 'REEUP_FLEETBASE_READY' }, origin);
-            });
-            console.log('[REEUP] Sent READY signal to parent');
         }
     }
 
