@@ -2,6 +2,7 @@ import Service from '@ember/service';
 import { inject as service } from '@ember/service';
 import { tracked } from '@glimmer/tracking';
 import SessionService from 'ember-simple-auth/services/session';
+import EphemeralStore from '../session-stores/ephemeral';
 
 /**
  * Custom Session Service for REEUP BFF Integration
@@ -23,11 +24,34 @@ import SessionService from 'ember-simple-auth/services/session';
  * - Console loads → This service detects BFF mode → Auto-authenticates
  * - All API calls automatically authenticated by BFF proxy
  * - No session tokens needed in browser (XSS-proof)
+ * - Uses ephemeral (in-memory) session store to avoid cross-origin localStorage issues
+ *
+ * Cross-Origin iframe Storage Issue:
+ * - Browsers block localStorage/sessionStorage access in cross-origin iframes
+ * - ember-simple-auth default stores fail silently, then auto-invalidate session
+ * - Ephemeral store keeps session in memory only, no storage access needed
  */
 export default class CustomSessionService extends SessionService {
     @service fetch;
     @service currentUser;
     @tracked isBffMode = false;
+    @tracked _ephemeralStore = null;
+
+    /**
+     * Override the store property to use ephemeral store in BFF mode
+     * This prevents cross-origin localStorage issues in iframes
+     */
+    get store() {
+        if (this.isBffMode) {
+            if (!this._ephemeralStore) {
+                console.log('[REEUP Session] Creating ephemeral session store for BFF mode');
+                this._ephemeralStore = EphemeralStore.create();
+            }
+            return this._ephemeralStore;
+        }
+        // Use default store for standalone mode
+        return super.store;
+    }
 
     /**
      * Setup session - called on app initialization
@@ -40,10 +64,12 @@ export default class CustomSessionService extends SessionService {
         console.log('[REEUP Session] Window location:', window.location.href);
         console.log('[REEUP Session] ========================================');
 
-        // Check if we're running in BFF mode
+        // Check if we're running in BFF mode FIRST
+        // This must be set before any session operations because it affects the store
         this.isBffMode = await this.detectBffMode();
 
         console.log('[REEUP Session] BFF Mode Result:', this.isBffMode);
+        console.log('[REEUP Session] Session store type:', this.store.constructor.name);
 
         if (this.isBffMode) {
             console.log('[REEUP Session] ✓ BFF mode CONFIRMED - attempting auto-authentication');
