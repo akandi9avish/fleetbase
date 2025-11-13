@@ -34,20 +34,27 @@ export default class CustomSessionService extends SessionService {
      * Detects BFF mode and auto-authenticates if needed
      */
     async setup() {
-        console.log('[REEUP Session] Initializing session service');
+        console.log('[REEUP Session] ========================================');
+        console.log('[REEUP Session] Initializing CUSTOM session service');
+        console.log('[REEUP Session] Service class:', this.constructor.name);
+        console.log('[REEUP Session] Window location:', window.location.href);
+        console.log('[REEUP Session] ========================================');
 
         // Check if we're running in BFF mode
         this.isBffMode = await this.detectBffMode();
 
+        console.log('[REEUP Session] BFF Mode Result:', this.isBffMode);
+
         if (this.isBffMode) {
-            console.log('[REEUP Session] BFF mode detected - attempting auto-authentication');
+            console.log('[REEUP Session] ✓ BFF mode CONFIRMED - attempting auto-authentication');
 
             // In BFF mode, try to authenticate automatically
             try {
                 await this.authenticateViaBff();
-                console.log('[REEUP Session] ✓ BFF auto-authentication successful');
+                console.log('[REEUP Session] ✓✓✓ BFF auto-authentication SUCCESSFUL');
             } catch (error) {
-                console.error('[REEUP Session] ✗ BFF auto-authentication failed:', error);
+                console.error('[REEUP Session] ✗✗✗ BFF auto-authentication FAILED:', error);
+                console.error('[REEUP Session] Error stack:', error.stack);
                 // Don't throw - let normal auth flow handle it
             }
         } else {
@@ -55,6 +62,8 @@ export default class CustomSessionService extends SessionService {
             // Call parent setup for normal authentication flow
             await super.setup();
         }
+
+        console.log('[REEUP Session] Setup complete. isAuthenticated:', this.isAuthenticated);
     }
 
     /**
@@ -63,20 +72,24 @@ export default class CustomSessionService extends SessionService {
      */
     async detectBffMode() {
         try {
+            console.log('[REEUP Session] Detecting BFF mode...');
+            console.log('[REEUP Session] this.fetch:', typeof this.fetch);
+
             // Check if API_HOST is same-origin
             const apiHost = this.fetch.apiHost;
             const currentOrigin = window.location.origin;
 
-            console.log('[REEUP Session] API Host:', apiHost);
+            console.log('[REEUP Session] API Host:', apiHost, '(type:', typeof apiHost, ')');
             console.log('[REEUP Session] Current Origin:', currentOrigin);
 
             // If API_HOST starts with current origin, we're in BFF mode
-            const isBff = apiHost.startsWith(currentOrigin);
-            console.log('[REEUP Session] BFF Mode:', isBff);
+            const isBff = apiHost && apiHost.startsWith(currentOrigin);
+            console.log('[REEUP Session] BFF Mode Check: apiHost.startsWith(currentOrigin) =', isBff);
 
             return isBff;
         } catch (error) {
-            console.error('[REEUP Session] Error detecting BFF mode:', error);
+            console.error('[REEUP Session] ✗ Error detecting BFF mode:', error);
+            console.error('[REEUP Session] Error stack:', error.stack);
             return false;
         }
     }
