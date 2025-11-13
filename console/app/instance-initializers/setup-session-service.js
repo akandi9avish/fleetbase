@@ -38,6 +38,16 @@ export function initialize(appInstance) {
             console.error('[REEUP Session Initializer] Service type:', sessionService.constructor.name);
         } else {
             console.log('[REEUP Session Initializer] ✓✓✓ Custom BFF session service loaded successfully');
+
+            // CRITICAL: Call setup() to initialize BFF mode detection
+            console.log('[REEUP Session Initializer] Calling setup() to initialize session...');
+            sessionService.setup().then(() => {
+                console.log('[REEUP Session Initializer] ✓✓✓ Session setup complete');
+                console.log('[REEUP Session Initializer] BFF Mode:', sessionService.isBffMode);
+                console.log('[REEUP Session Initializer] Store type:', sessionService.store.constructor.name);
+            }).catch((error) => {
+                console.error('[REEUP Session Initializer] ✗✗✗ Setup failed:', error);
+            });
         }
     } catch (error) {
         console.error('[REEUP Session Initializer] ✗✗✗ Failed to initialize session service:', error);
