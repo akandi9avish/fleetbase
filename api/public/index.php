@@ -7,6 +7,52 @@ define('LARAVEL_START', microtime(true));
 
 /*
 |--------------------------------------------------------------------------
+| Global Error Handler (FrankenPHP/Octane Fix)
+|--------------------------------------------------------------------------
+|
+| Catch all exceptions and errors at the earliest possible point to ensure
+| error messages appear in logs instead of generic "ERROR unknown error"
+| from FrankenPHP worker crashes.
+|
+*/
+
+set_exception_handler(function (\Throwable $e) {
+    $msg = sprintf(
+        "[FATAL] %s: %s in %s:%d\n%s\n",
+        get_class($e),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine(),
+        $e->getTraceAsString()
+    );
+    fwrite(STDERR, $msg);
+    throw $e; // Re-throw to allow normal handling
+});
+
+set_error_handler(function ($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) {
+        return false;
+    }
+    $msg = sprintf("[ERROR] %s in %s:%d\n", $message, $file, $line);
+    fwrite(STDERR, $msg);
+    throw new \ErrorException($message, 0, $severity, $file, $line);
+});
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
+        $msg = sprintf(
+            "[FATAL ERROR] %s in %s:%d\n",
+            $error['message'],
+            $error['file'],
+            $error['line']
+        );
+        fwrite(STDERR, $msg);
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
 | Check If The Application Is Under Maintenance
 |--------------------------------------------------------------------------
 |
