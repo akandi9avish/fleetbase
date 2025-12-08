@@ -2,7 +2,9 @@
 
 namespace Reeup\Integration\Observability;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Octane\Events\RequestTerminated;
 
 /**
  * OpenTelemetry Observability Service Provider for REEUP Fleetbase Integration
@@ -11,6 +13,9 @@ use Illuminate\Support\ServiceProvider;
  * Works alongside Sentry for error tracking.
  *
  * This provider is defensive - it will only load if OpenTelemetry packages are installed.
+ *
+ * IMPORTANT: This provider is Octane-compatible. It uses SimpleSpanProcessor for
+ * immediate span export since Octane workers don't terminate between requests.
  */
 class ObservabilityServiceProvider extends ServiceProvider
 {
@@ -40,15 +45,18 @@ class ObservabilityServiceProvider extends ServiceProvider
     {
         // Skip registration if OTEL packages aren't installed
         if (!$this->isOtelAvailable()) {
+            Log::debug('[OTEL] OpenTelemetry packages not available - skipping registration');
             return;
         }
 
-        $this->app->singleton(\OpenTelemetry\API\Trace\TracerInterface::class, function ($app) {
-            return $this->createTracer();
-        });
+        Log::info('[OTEL] Registering OpenTelemetry service provider');
 
         $this->app->singleton(\OpenTelemetry\SDK\Trace\TracerProvider::class, function ($app) {
             return $this->createTracerProvider();
+        });
+
+        $this->app->singleton(\OpenTelemetry\API\Trace\TracerInterface::class, function ($app) {
+            return $this->createTracer();
         });
     }
 
@@ -59,22 +67,37 @@ class ObservabilityServiceProvider extends ServiceProvider
     {
         // Only initialize if OTEL is enabled and available
         if (!$this->isEnabled()) {
+            Log::debug('[OTEL] OpenTelemetry not enabled or not available', [
+                'otel_enabled' => env('OTEL_ENABLED', false),
+                'endpoint_set' => !empty(env('OTEL_EXPORTER_OTLP_ENDPOINT')),
+                'packages_available' => $this->isOtelAvailable(),
+            ]);
             return;
         }
 
-        // Register the tracer provider globally for auto-instrumentation
+        Log::info('[OTEL] Bootstrapping OpenTelemetry', [
+            'service_name' => env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
+            'endpoint' => env('OTEL_EXPORTER_OTLP_ENDPOINT'),
+        ]);
+
+        // Force-resolve the tracer provider to ensure it's initialized
         $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
-        \OpenTelemetry\API\Globals::registerInitializer(function () use ($tracerProvider) {
-            return $tracerProvider;
+
+        // Register Octane event listener to flush spans after each request
+        // This is critical because Octane workers don't terminate between requests
+        if (class_exists(RequestTerminated::class)) {
+            $this->app['events']->listen(RequestTerminated::class, function () {
+                $this->flushSpans();
+            });
+            Log::info('[OTEL] Registered Octane RequestTerminated listener for span flushing');
+        }
+
+        // Also register shutdown handler as fallback for non-Octane environments
+        $this->app->terminating(function () {
+            $this->shutdownTracer();
         });
 
-        // Register shutdown handler to flush pending spans
-        $this->app->terminating(function () {
-            $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
-            if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
-                $tracerProvider->shutdown();
-            }
-        });
+        Log::info('[OTEL] OpenTelemetry bootstrap complete');
     }
 
     /**
@@ -132,19 +155,70 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
 
     /**
-     * Create the BatchSpanProcessor with OTLP HTTP exporter.
+     * Create the span processor.
+     *
+     * Uses SimpleSpanProcessor for Octane compatibility (immediate export).
+     * This ensures spans are exported immediately rather than batched,
+     * which is necessary because Octane workers don't terminate between requests.
+     *
+     * Set OTEL_USE_BATCH_PROCESSOR=true to use BatchSpanProcessor instead
+     * (only recommended for non-Octane environments).
      */
-    protected function createSpanProcessor(): \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor
+    protected function createSpanProcessor(): \OpenTelemetry\SDK\Trace\SpanProcessorInterface
     {
         $exporter = $this->createOtlpExporter();
 
-        return new \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor(
-            exporter: $exporter,
-            maxQueueSize: (int) env('OTEL_BSP_MAX_QUEUE_SIZE', 2048),
-            scheduledDelayMillis: (int) env('OTEL_BSP_SCHEDULE_DELAY', 5000),
-            exportTimeoutMillis: (int) env('OTEL_BSP_EXPORT_TIMEOUT', 30000),
-            maxExportBatchSize: (int) env('OTEL_BSP_MAX_EXPORT_BATCH_SIZE', 512)
-        );
+        // Use SimpleSpanProcessor by default for Octane compatibility
+        $useBatch = filter_var(env('OTEL_USE_BATCH_PROCESSOR', false), FILTER_VALIDATE_BOOLEAN);
+
+        if ($useBatch) {
+            Log::info('[OTEL] Using BatchSpanProcessor (not recommended for Octane)');
+            return new \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor(
+                exporter: $exporter,
+                maxQueueSize: (int) env('OTEL_BSP_MAX_QUEUE_SIZE', 2048),
+                scheduledDelayMillis: (int) env('OTEL_BSP_SCHEDULE_DELAY', 5000),
+                exportTimeoutMillis: (int) env('OTEL_BSP_EXPORT_TIMEOUT', 30000),
+                maxExportBatchSize: (int) env('OTEL_BSP_MAX_EXPORT_BATCH_SIZE', 512)
+            );
+        }
+
+        Log::info('[OTEL] Using SimpleSpanProcessor for Octane compatibility');
+        return new \OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor($exporter);
+    }
+
+    /**
+     * Flush pending spans (called after each Octane request).
+     */
+    protected function flushSpans(): void
+    {
+        try {
+            if ($this->app->bound(\OpenTelemetry\SDK\Trace\TracerProvider::class)) {
+                $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
+                if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
+                    $tracerProvider->forceFlush();
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[OTEL] Failed to flush spans: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Shutdown the tracer provider (called on application termination).
+     */
+    protected function shutdownTracer(): void
+    {
+        try {
+            if ($this->app->bound(\OpenTelemetry\SDK\Trace\TracerProvider::class)) {
+                $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
+                if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
+                    $tracerProvider->shutdown();
+                    Log::info('[OTEL] TracerProvider shutdown complete');
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[OTEL] Failed to shutdown tracer: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -154,6 +228,12 @@ class ObservabilityServiceProvider extends ServiceProvider
     {
         $endpoint = $this->buildOtlpEndpoint();
         $headers = $this->buildOtlpHeaders();
+
+        Log::info('[OTEL] Creating OTLP exporter', [
+            'endpoint' => $endpoint,
+            'has_auth' => isset($headers['Authorization']),
+            'stream_name' => $headers['stream-name'] ?? 'not set',
+        ]);
 
         $transport = (new \OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory())->create(
             endpoint: $endpoint,

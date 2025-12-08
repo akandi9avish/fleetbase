@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('int/v1/reeup')->namespace('Reeup\Integration\Http\Controllers')->group(function ($router) {
+    // OTEL Diagnostic endpoint (public for debugging)
+    $router->get('otel-diagnostic', 'OtelDiagnosticController@diagnose');
+
     // Protected routes (require authentication)
     $router->middleware(['fleetbase.protected', 'Reeup\Integration\Http\Middleware\InjectCompanyContext'])->group(function () use ($router) {
         // User management endpoints
