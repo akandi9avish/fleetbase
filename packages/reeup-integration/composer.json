@@ -18,12 +18,11 @@
     ],
     "require": {
         "php": "^8.0",
-        "fleetbase/core-api": "*",
-        "open-telemetry/opentelemetry": "^1.0",
-        "open-telemetry/exporter-otlp": "^1.0",
-        "open-telemetry/transport-http": "^1.0",
-        "guzzlehttp/psr7": "^2.1",
-        "php-http/guzzle7-adapter": "^1.0"
+        "fleetbase/core-api": "*"
+    },
+    "suggest": {
+        "open-telemetry/sdk": "Required for OpenTelemetry tracing support",
+        "open-telemetry/exporter-otlp": "Required for OTLP export to OpenObserve"
     },
     "autoload": {
         "psr-4": {
