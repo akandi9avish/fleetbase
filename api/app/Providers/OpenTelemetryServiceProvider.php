@@ -15,7 +15,6 @@ use OpenTelemetry\SDK\Resource\ResourceInfoFactory;
 use OpenTelemetry\SDK\Trace\Sampler\AlwaysOnSampler;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
 use OpenTelemetry\SDK\Trace\TracerProvider;
-use OpenTelemetry\SemConv\ResourceAttributes;
 
 class OpenTelemetryServiceProvider extends ServiceProvider
 {
@@ -143,11 +142,12 @@ class OpenTelemetryServiceProvider extends ServiceProvider
         $exporter = new SpanExporter($transport);
 
         // Create resource with service attributes
+        // Use string keys for compatibility across OpenTelemetry SemConv versions
         $resource = ResourceInfo::create(Attributes::create([
-            ResourceAttributes::SERVICE_NAME => $serviceName,
-            ResourceAttributes::SERVICE_NAMESPACE => $serviceNamespace,
-            ResourceAttributes::SERVICE_VERSION => config('app.version', '1.0.0'),
-            ResourceAttributes::DEPLOYMENT_ENVIRONMENT => config('app.env', 'production'),
+            'service.name' => $serviceName,
+            'service.namespace' => $serviceNamespace,
+            'service.version' => config('app.version', '1.0.0'),
+            'deployment.environment' => config('app.env', 'production'),
             'service.instance.id' => env('RAILWAY_SERVICE_ID', gethostname()),
         ]));
 
