@@ -116,12 +116,8 @@ COPY --chown=www-data:www-data ./packages /fleetbase/packages
 # Optimize Composer Dependency Installation
 COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
 
-# Pre-install Composer dependencies
+# Pre-install Composer dependencies (includes OpenTelemetry packages from composer.json)
 RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
-
-# Install OpenTelemetry packages for observability (optional, provider is defensive)
-# Includes: SDK, OTLP exporter, and semantic conventions for resource attributes
-RUN su www-data -s /bin/sh -c "composer require --no-scripts --optimize-autoloader --no-cache open-telemetry/sdk open-telemetry/exporter-otlp open-telemetry/sem-conv || echo 'OTEL packages not installed - tracing will be disabled'"
 
 # Setup application
 COPY --chown=www-data:www-data ./api /fleetbase/api
