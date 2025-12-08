@@ -4,24 +4,33 @@ namespace Reeup\Integration\Observability\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use OpenTelemetry\API\Trace\SpanKind;
-use OpenTelemetry\API\Trace\StatusCode;
-use OpenTelemetry\API\Trace\TracerInterface;
-use OpenTelemetry\SemConv\TraceAttributes;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Middleware for automatic HTTP request tracing with OpenTelemetry.
  *
  * Creates spans for incoming HTTP requests with standard semantic conventions.
+ * This middleware is defensive - it will skip tracing if OpenTelemetry is not available.
  */
 class TraceRequests
 {
-    protected TracerInterface $tracer;
+    protected $tracer = null;
 
-    public function __construct(TracerInterface $tracer)
+    public function __construct()
     {
-        $this->tracer = $tracer;
+        // Only initialize tracer if OpenTelemetry is available
+        if ($this->isOtelAvailable() && app()->bound(\OpenTelemetry\API\Trace\TracerInterface::class)) {
+            $this->tracer = app(\OpenTelemetry\API\Trace\TracerInterface::class);
+        }
+    }
+
+    /**
+     * Check if OpenTelemetry SDK is available.
+     */
+    protected function isOtelAvailable(): bool
+    {
+        return class_exists(\OpenTelemetry\API\Trace\TracerInterface::class)
+            && class_exists(\OpenTelemetry\API\Trace\SpanKind::class);
     }
 
     /**
@@ -29,25 +38,25 @@ class TraceRequests
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Skip tracing if disabled
-        if (!env('OTEL_ENABLED', false)) {
+        // Skip tracing if disabled or not available
+        if (!env('OTEL_ENABLED', false) || !$this->tracer || !$this->isOtelAvailable()) {
             return $next($request);
         }
 
         $spanName = $this->buildSpanName($request);
 
         $span = $this->tracer->spanBuilder($spanName)
-            ->setSpanKind(SpanKind::KIND_SERVER)
+            ->setSpanKind(\OpenTelemetry\API\Trace\SpanKind::KIND_SERVER)
             ->setAttributes([
-                TraceAttributes::HTTP_REQUEST_METHOD => $request->method(),
-                TraceAttributes::URL_FULL => $request->fullUrl(),
-                TraceAttributes::URL_PATH => $request->path(),
-                TraceAttributes::URL_SCHEME => $request->getScheme(),
-                TraceAttributes::SERVER_ADDRESS => $request->getHost(),
-                TraceAttributes::SERVER_PORT => $request->getPort(),
-                TraceAttributes::USER_AGENT_ORIGINAL => $request->userAgent() ?? 'unknown',
-                TraceAttributes::CLIENT_ADDRESS => $request->ip(),
-                TraceAttributes::HTTP_ROUTE => $request->route()?->uri() ?? $request->path(),
+                'http.request.method' => $request->method(),
+                'url.full' => $request->fullUrl(),
+                'url.path' => $request->path(),
+                'url.scheme' => $request->getScheme(),
+                'server.address' => $request->getHost(),
+                'server.port' => $request->getPort(),
+                'user_agent.original' => $request->userAgent() ?? 'unknown',
+                'client.address' => $request->ip(),
+                'http.route' => $request->route()?->uri() ?? $request->path(),
                 'http.request.body_size' => $request->header('Content-Length', 0),
             ])
             ->startSpan();
@@ -62,23 +71,23 @@ class TraceRequests
             $response = $next($request);
 
             // Record response attributes
-            $span->setAttribute(TraceAttributes::HTTP_RESPONSE_STATUS_CODE, $response->getStatusCode());
+            $span->setAttribute('http.response.status_code', $response->getStatusCode());
             $span->setAttribute('http.response.body_size', strlen($response->getContent()));
 
             // Set span status based on HTTP status code
             if ($response->getStatusCode() >= 500) {
-                $span->setStatus(StatusCode::STATUS_ERROR, 'Server error');
+                $span->setStatus(\OpenTelemetry\API\Trace\StatusCode::STATUS_ERROR, 'Server error');
             } elseif ($response->getStatusCode() >= 400) {
-                $span->setStatus(StatusCode::STATUS_ERROR, 'Client error');
+                $span->setStatus(\OpenTelemetry\API\Trace\StatusCode::STATUS_ERROR, 'Client error');
             } else {
-                $span->setStatus(StatusCode::STATUS_OK);
+                $span->setStatus(\OpenTelemetry\API\Trace\StatusCode::STATUS_OK);
             }
 
             return $response;
         } catch (\Throwable $exception) {
             // Record exception details
             $span->recordException($exception);
-            $span->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
+            $span->setStatus(\OpenTelemetry\API\Trace\StatusCode::STATUS_ERROR, $exception->getMessage());
 
             throw $exception;
         } finally {

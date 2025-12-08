@@ -3,38 +3,51 @@
 namespace Reeup\Integration\Observability;
 
 use Illuminate\Support\ServiceProvider;
-use OpenTelemetry\API\Globals;
-use OpenTelemetry\API\Trace\TracerInterface;
-use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
-use OpenTelemetry\Contrib\Otlp\SpanExporter;
-use OpenTelemetry\SDK\Common\Attribute\Attributes;
-use OpenTelemetry\SDK\Resource\ResourceInfo;
-use OpenTelemetry\SDK\Resource\ResourceInfoFactory;
-use OpenTelemetry\SDK\Trace\Sampler\AlwaysOnSampler;
-use OpenTelemetry\SDK\Trace\Sampler\ParentBased;
-use OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor;
-use OpenTelemetry\SDK\Trace\TracerProvider;
-use OpenTelemetry\SemConv\ResourceAttributes;
 
 /**
  * OpenTelemetry Observability Service Provider for REEUP Fleetbase Integration
  *
  * Configures OpenTelemetry SDK to send traces to OpenObserve via OTLP HTTP.
  * Works alongside Sentry for error tracking.
+ *
+ * This provider is defensive - it will only load if OpenTelemetry packages are installed.
  */
 class ObservabilityServiceProvider extends ServiceProvider
 {
+    /**
+     * Check if OpenTelemetry SDK is available.
+     */
+    protected function isOtelAvailable(): bool
+    {
+        return class_exists(\OpenTelemetry\SDK\Trace\TracerProvider::class)
+            && class_exists(\OpenTelemetry\Contrib\Otlp\SpanExporter::class);
+    }
+
+    /**
+     * Check if OpenTelemetry is enabled.
+     */
+    protected function isEnabled(): bool
+    {
+        return env('OTEL_ENABLED', false)
+            && !empty(env('OTEL_EXPORTER_OTLP_ENDPOINT'))
+            && $this->isOtelAvailable();
+    }
+
     /**
      * Register the OpenTelemetry tracer provider.
      */
     public function register(): void
     {
-        $this->app->singleton(TracerInterface::class, function ($app) {
+        // Skip registration if OTEL packages aren't installed
+        if (!$this->isOtelAvailable()) {
+            return;
+        }
+
+        $this->app->singleton(\OpenTelemetry\API\Trace\TracerInterface::class, function ($app) {
             return $this->createTracer();
         });
 
-        // Register the tracer provider globally
-        $this->app->singleton(TracerProvider::class, function ($app) {
+        $this->app->singleton(\OpenTelemetry\SDK\Trace\TracerProvider::class, function ($app) {
             return $this->createTracerProvider();
         });
     }
@@ -44,51 +57,43 @@ class ObservabilityServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Only initialize if OTEL is enabled
+        // Only initialize if OTEL is enabled and available
         if (!$this->isEnabled()) {
             return;
         }
 
         // Register the tracer provider globally for auto-instrumentation
-        $tracerProvider = $this->app->make(TracerProvider::class);
-        Globals::registerInitializer(function () use ($tracerProvider) {
+        $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
+        \OpenTelemetry\API\Globals::registerInitializer(function () use ($tracerProvider) {
             return $tracerProvider;
         });
 
         // Register shutdown handler to flush pending spans
         $this->app->terminating(function () {
-            $tracerProvider = $this->app->make(TracerProvider::class);
-            if ($tracerProvider instanceof TracerProvider) {
+            $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
+            if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
                 $tracerProvider->shutdown();
             }
         });
     }
 
     /**
-     * Check if OpenTelemetry is enabled.
-     */
-    protected function isEnabled(): bool
-    {
-        return env('OTEL_ENABLED', false)
-            && !empty(env('OTEL_EXPORTER_OTLP_ENDPOINT'));
-    }
-
-    /**
      * Create the OpenTelemetry TracerProvider.
      */
-    protected function createTracerProvider(): TracerProvider
+    protected function createTracerProvider(): \OpenTelemetry\SDK\Trace\TracerProvider
     {
         if (!$this->isEnabled()) {
-            // Return a no-op tracer provider when disabled
-            return new TracerProvider();
+            return new \OpenTelemetry\SDK\Trace\TracerProvider();
         }
 
         $resource = $this->createResource();
         $spanProcessor = $this->createSpanProcessor();
 
-        return new TracerProvider(
+        return new \OpenTelemetry\SDK\Trace\TracerProvider(
             spanProcessors: [$spanProcessor],
-            sampler: new ParentBased(new AlwaysOnSampler()),
+            sampler: new \OpenTelemetry\SDK\Trace\Sampler\ParentBased(
+                new \OpenTelemetry\SDK\Trace\Sampler\AlwaysOnSampler()
+            ),
             resource: $resource
         );
     }
@@ -96,9 +101,9 @@ class ObservabilityServiceProvider extends ServiceProvider
     /**
      * Create the OpenTelemetry Tracer.
      */
-    protected function createTracer(): TracerInterface
+    protected function createTracer(): \OpenTelemetry\API\Trace\TracerInterface
     {
-        $tracerProvider = $this->app->make(TracerProvider::class);
+        $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
 
         return $tracerProvider->getTracer(
             name: 'reeup-fleetbase',
@@ -110,15 +115,15 @@ class ObservabilityServiceProvider extends ServiceProvider
     /**
      * Create the Resource with service attributes.
      */
-    protected function createResource(): ResourceInfo
+    protected function createResource(): \OpenTelemetry\SDK\Resource\ResourceInfo
     {
-        return ResourceInfoFactory::defaultResource()->merge(
-            ResourceInfo::create(
-                Attributes::create([
-                    ResourceAttributes::SERVICE_NAME => env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
-                    ResourceAttributes::SERVICE_VERSION => env('APP_VERSION', '1.0.0'),
-                    ResourceAttributes::SERVICE_NAMESPACE => 'logistics',
-                    ResourceAttributes::DEPLOYMENT_ENVIRONMENT => env('APP_ENV', 'production'),
+        return \OpenTelemetry\SDK\Resource\ResourceInfoFactory::defaultResource()->merge(
+            \OpenTelemetry\SDK\Resource\ResourceInfo::create(
+                \OpenTelemetry\SDK\Common\Attribute\Attributes::create([
+                    \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_NAME => env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
+                    \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_VERSION => env('APP_VERSION', '1.0.0'),
+                    \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_NAMESPACE => 'logistics',
+                    \OpenTelemetry\SemConv\ResourceAttributes::DEPLOYMENT_ENVIRONMENT => env('APP_ENV', 'production'),
                     'platform' => 'reeup',
                     'service.instance.id' => gethostname(),
                 ])
@@ -129,11 +134,11 @@ class ObservabilityServiceProvider extends ServiceProvider
     /**
      * Create the BatchSpanProcessor with OTLP HTTP exporter.
      */
-    protected function createSpanProcessor(): BatchSpanProcessor
+    protected function createSpanProcessor(): \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor
     {
         $exporter = $this->createOtlpExporter();
 
-        return new BatchSpanProcessor(
+        return new \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor(
             exporter: $exporter,
             maxQueueSize: (int) env('OTEL_BSP_MAX_QUEUE_SIZE', 2048),
             scheduledDelayMillis: (int) env('OTEL_BSP_SCHEDULE_DELAY', 5000),
@@ -145,12 +150,12 @@ class ObservabilityServiceProvider extends ServiceProvider
     /**
      * Create the OTLP HTTP exporter for OpenObserve.
      */
-    protected function createOtlpExporter(): SpanExporter
+    protected function createOtlpExporter(): \OpenTelemetry\Contrib\Otlp\SpanExporter
     {
         $endpoint = $this->buildOtlpEndpoint();
         $headers = $this->buildOtlpHeaders();
 
-        $transport = (new OtlpHttpTransportFactory())->create(
+        $transport = (new \OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory())->create(
             endpoint: $endpoint,
             contentType: 'application/json',
             headers: $headers,
@@ -160,7 +165,7 @@ class ObservabilityServiceProvider extends ServiceProvider
             timeout: 10
         );
 
-        return new SpanExporter($transport);
+        return new \OpenTelemetry\Contrib\Otlp\SpanExporter($transport);
     }
 
     /**
