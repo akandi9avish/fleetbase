@@ -116,9 +116,8 @@ COPY --chown=www-data:www-data ./packages /fleetbase/packages
 # Optimize Composer Dependency Installation
 COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
 
-# Pre-install Composer dependencies
-# Use --no-lock to ignore lock file mismatch, then update lock file with OTEL packages
-RUN su www-data -s /bin/sh -c "composer update --no-scripts --optimize-autoloader --no-dev --no-cache"
+# Pre-install Composer dependencies (lock file includes all OTEL packages)
+RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
 
 # Setup application
 COPY --chown=www-data:www-data ./api /fleetbase/api
