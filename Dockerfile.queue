@@ -94,8 +94,8 @@ COPY --chown=www-data:www-data ./packages /fleetbase/packages
 # Copy composer files
 COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
 
-# Install Composer dependencies
-RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
+# Install Composer dependencies (use update to resolve new packages in composer.json)
+RUN su www-data -s /bin/sh -c "composer update --no-scripts --optimize-autoloader --no-dev --no-cache"
 
 # Copy application code
 COPY --chown=www-data:www-data ./api /fleetbase/api
