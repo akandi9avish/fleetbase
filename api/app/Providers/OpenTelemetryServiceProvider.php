@@ -10,6 +10,7 @@ use OpenTelemetry\Contrib\Otlp\SpanExporter;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
 use OpenTelemetry\SDK\Resource\ResourceInfoFactory;
+use OpenTelemetry\SDK\Sdk;
 use OpenTelemetry\SDK\Trace\Sampler\AlwaysOnSampler;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
 use OpenTelemetry\SDK\Trace\TracerProvider;
@@ -158,17 +159,21 @@ class OpenTelemetryServiceProvider extends ServiceProvider
 
         Log::info('[OTEL] Using SimpleSpanProcessor for Octane compatibility');
 
-        // Create and register TracerProvider
+        // Create TracerProvider
         $tracerProvider = TracerProvider::builder()
             ->addSpanProcessor($spanProcessor)
             ->setResource($resource)
             ->setSampler(new AlwaysOnSampler())
             ->build();
 
-        // Register as global tracer provider
-        Globals::registerInitializer(function () use ($tracerProvider) {
-            return $tracerProvider;
-        });
+        // Register globally using SDK builder (correct method)
+        // This properly attaches to the OpenTelemetry context
+        Sdk::builder()
+            ->setTracerProvider($tracerProvider)
+            ->setAutoShutdown(true)
+            ->buildAndRegisterGlobal();
+
+        Log::info('[OTEL] TracerProvider registered globally via Sdk::buildAndRegisterGlobal()');
     }
 
     /**
@@ -186,19 +191,5 @@ class OpenTelemetryServiceProvider extends ServiceProvider
         }
     }
 
-    /**
-     * Shutdown OTEL when application terminates.
-     */
-    public function __destruct()
-    {
-        try {
-            $tracerProvider = Globals::tracerProvider();
-            if ($tracerProvider instanceof TracerProvider) {
-                $tracerProvider->shutdown();
-                Log::info('[OTEL] TracerProvider shutdown complete');
-            }
-        } catch (\Throwable $e) {
-            // Silently ignore shutdown errors
-        }
-    }
+    // Note: Shutdown is handled automatically via Sdk::builder()->setAutoShutdown(true)
 }

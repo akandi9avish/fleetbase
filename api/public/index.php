@@ -1,5 +1,21 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| Suppress PHP Deprecation Warnings (FrankenPHP Compatibility)
+|--------------------------------------------------------------------------
+|
+| FrankenPHP emits "ERROR unknown error" for each PHP deprecation warning.
+| Suppress these to keep logs clean. Vendor code (fleetbase/core-api) has
+| deprecations that won't be fixed upstream.
+|
+| The warnings are in vendor/fleetbase/core-api:
+| - HasApiModelBehavior.php:600 - optional param before required
+| - Arr.php:85, Arr.php:112 - optional param before required
+|
+*/
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 
