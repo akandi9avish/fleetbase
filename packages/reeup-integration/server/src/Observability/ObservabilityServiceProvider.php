@@ -169,27 +169,55 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
 
     /**
-     * Build the OTLP endpoint URL for OpenObserve.
+     * Build the OTLP endpoint URL based on the target backend.
      *
-     * OpenObserve expects traces at: {base}/api/{org}/v1/traces
+     * Supports multiple backend types:
+     * - OpenObserve: {base}/api/{org}/v1/traces (default)
+     * - OTel Collector: {base}/v1/traces
+     * - Custom: Use full path in OTEL_EXPORTER_OTLP_ENDPOINT
+     *
+     * Environment Variables:
+     * - OTEL_EXPORTER_OTLP_ENDPOINT: Base URL or full endpoint path
+     * - OTEL_ENDPOINT_TYPE: 'openobserve' (default), 'collector', or 'auto'
+     * - OPENOBSERVE_ORGANIZATION: Organization name for OpenObserve (default: 'reeup')
      */
     protected function buildOtlpEndpoint(): string
     {
         $baseEndpoint = rtrim(env('OTEL_EXPORTER_OTLP_ENDPOINT', ''), '/');
         $organization = env('OPENOBSERVE_ORGANIZATION', 'reeup');
+        $endpointType = strtolower(env('OTEL_ENDPOINT_TYPE', 'auto'));
 
-        // Check if endpoint already includes /v1/traces
+        // If endpoint already includes /v1/traces, use as-is (explicit full path)
         if (str_contains($baseEndpoint, '/v1/traces')) {
             return $baseEndpoint;
         }
 
-        // Check if using OTel Collector (internal Railway endpoint)
-        if (str_contains($baseEndpoint, '.railway.internal')) {
-            // OTel Collector uses standard OTLP endpoint
+        // Explicit endpoint type takes precedence
+        if ($endpointType === 'collector') {
+            // Standard OTLP Collector endpoint
             return $baseEndpoint . '/v1/traces';
         }
 
-        // Direct to OpenObserve: {base}/api/{org}/v1/traces
+        if ($endpointType === 'openobserve') {
+            // OpenObserve format: {base}/api/{org}/v1/traces
+            return $baseEndpoint . '/api/' . $organization . '/v1/traces';
+        }
+
+        // Auto-detect based on hostname patterns
+        $hostname = parse_url($baseEndpoint, PHP_URL_HOST) ?? '';
+
+        // Check if it's an OTel Collector (look for 'collector' in hostname)
+        if (preg_match('/\b(otel-?collector|collector)\b/i', $hostname)) {
+            return $baseEndpoint . '/v1/traces';
+        }
+
+        // Check if it's OpenObserve (look for 'openobserve' or 'o2' in hostname)
+        if (preg_match('/\b(openobserve|o2)\b/i', $hostname)) {
+            return $baseEndpoint . '/api/' . $organization . '/v1/traces';
+        }
+
+        // Default to OpenObserve format (most common for direct OTLP ingestion)
+        // This handles cases like openobserve.railway.internal
         return $baseEndpoint . '/api/' . $organization . '/v1/traces';
     }
 
