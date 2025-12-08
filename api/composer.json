@@ -40,6 +40,7 @@
         "stripe/stripe-php": "13.13.0",
         "symfony/mailgun-mailer": "^7.1",
         "symfony/postmark-mailer": "^7.1",
+        "open-telemetry/api": "^1.0",
         "open-telemetry/sdk": "^1.0",
         "open-telemetry/exporter-otlp": "^1.0",
         "open-telemetry/sem-conv": "^1.0"

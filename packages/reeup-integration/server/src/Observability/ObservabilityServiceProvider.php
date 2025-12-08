@@ -229,11 +229,10 @@ class ObservabilityServiceProvider extends ServiceProvider
         $endpoint = $this->buildOtlpEndpoint();
         $headers = $this->buildOtlpHeaders();
 
-        Log::info('[OTEL] Creating OTLP exporter', [
-            'endpoint' => $endpoint,
-            'has_auth' => isset($headers['Authorization']),
-            'stream_name' => $headers['stream-name'] ?? 'not set',
-        ]);
+        // Log with explicit string formatting for Railway visibility
+        Log::info('[OTEL] Creating OTLP exporter to: ' . $endpoint);
+        Log::info('[OTEL] Auth configured: ' . (isset($headers['Authorization']) ? 'yes' : 'no'));
+        Log::info('[OTEL] Stream name: ' . ($headers['stream-name'] ?? 'not set'));
 
         $transport = (new \OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory())->create(
             endpoint: $endpoint,
