@@ -123,7 +123,7 @@ class ObservabilityServiceProvider extends ServiceProvider
                     \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_NAME => env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
                     \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_VERSION => env('APP_VERSION', '1.0.0'),
                     \OpenTelemetry\SemConv\ResourceAttributes::SERVICE_NAMESPACE => 'logistics',
-                    \OpenTelemetry\SemConv\ResourceAttributes::DEPLOYMENT_ENVIRONMENT => env('APP_ENV', 'production'),
+                    \OpenTelemetry\SemConv\ResourceAttributes::DEPLOYMENT_ENVIRONMENT_NAME => env('APP_ENV', 'production'),
                     'platform' => 'reeup',
                     'service.instance.id' => gethostname(),
                 ])
