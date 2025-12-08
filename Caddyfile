@@ -3,11 +3,32 @@
 		num_threads 24
 	}
 	order php_server before file_server
+	# Enable debug logging to stderr
+	log {
+		output stderr
+		format console
+		level DEBUG
+	}
 }
 
 :{$PORT:8000} {
 	root * /fleetbase/api/public
 	encode zstd br gzip
+
+	# Log all requests and errors to stderr with details
+	log {
+		output stderr
+		format console {
+			time_format iso8601
+		}
+		level DEBUG
+	}
+
+	# Handle errors with detailed logging
+	handle_errors {
+		respond "Error {err.status_code}: {err.message}" {err.status_code}
+	}
+
 	php_server {
 		resolve_root_symlink
 	}
