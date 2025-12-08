@@ -5,8 +5,6 @@ namespace App\Providers;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use OpenTelemetry\API\Globals;
-use OpenTelemetry\API\Trace\Propagation\TraceContextPropagator;
-use OpenTelemetry\Context\Propagation\TextMapPropagator;
 use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
 use OpenTelemetry\Contrib\Otlp\SpanExporter;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
@@ -171,9 +169,6 @@ class OpenTelemetryServiceProvider extends ServiceProvider
         Globals::registerInitializer(function () use ($tracerProvider) {
             return $tracerProvider;
         });
-
-        // Set up context propagation
-        TextMapPropagator::setInstance(TraceContextPropagator::getInstance());
     }
 
     /**

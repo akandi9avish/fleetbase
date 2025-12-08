@@ -42,6 +42,17 @@ class Handler extends ExceptionHandler
      */
     public function report(\Throwable $exception)
     {
+        // IMMEDIATE stderr output - bypasses buffering and ensures message appears in logs
+        // This fixes the "ERROR unknown error" issue from FrankenPHP
+        $errorMsg = sprintf(
+            "[%s] %s in %s:%d\n",
+            get_class($exception),
+            $exception->getMessage() ?: 'No message',
+            $exception->getFile(),
+            $exception->getLine()
+        );
+        fwrite(STDERR, $errorMsg);
+
         // Record to OTEL first (before any potential early returns)
         $this->recordExceptionToOtel($exception);
 
