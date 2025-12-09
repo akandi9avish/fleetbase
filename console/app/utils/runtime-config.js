@@ -42,13 +42,28 @@ function isReeupParent(parentOrigin) {
 
 function getConfigUrl() {
     const timestamp = Date.now();
+
+    // Priority 1: Check for reeupConfigUrl query parameter (most reliable)
+    // This is passed from the parent REEUP app via iframe src
+    if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const reeupConfigUrl = urlParams.get('reeupConfigUrl');
+        if (reeupConfigUrl && isReeupParent(reeupConfigUrl)) {
+            console.log('[REEUP Config] Using reeupConfigUrl param:', reeupConfigUrl);
+            return `${reeupConfigUrl}/fleetbase.config.json?_t=${timestamp}`;
+        }
+    }
+
+    // Priority 2: Fallback to referrer detection (may not work in all browsers)
     if (isInIframe()) {
         const parentOrigin = getParentOrigin();
         if (isReeupParent(parentOrigin)) {
-            console.log('[REEUP Config] Fetching config from REEUP parent:', parentOrigin);
+            console.log('[REEUP Config] Using referrer-based parent:', parentOrigin);
             return `${parentOrigin}/fleetbase.config.json?_t=${timestamp}`;
         }
     }
+
+    // Priority 3: Local config (standalone mode)
     return `/fleetbase.config.json?_t=${timestamp}`;
 }
 
@@ -134,12 +149,18 @@ export default async function loadRuntimeConfig() {
         const runtimeConfig = await response.json();
 
         // Store iframe context for session service
-        if (isInIframe()) {
-            runtimeConfig._isInIframe = true;
-            runtimeConfig._parentOrigin = getParentOrigin();
+        // Check URL param first (most reliable), then referrer
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const reeupConfigUrl = urlParams?.get('reeupConfigUrl');
+
+        if (reeupConfigUrl || isInIframe()) {
+            runtimeConfig._isInIframe = isInIframe();
+            runtimeConfig._reeupConfigUrl = reeupConfigUrl || null;
+            runtimeConfig._parentOrigin = reeupConfigUrl || getParentOrigin();
             runtimeConfig._isReeupEmbedded = isReeupParent(runtimeConfig._parentOrigin);
             console.log('[REEUP Config] Iframe context stored:', {
                 _isInIframe: runtimeConfig._isInIframe,
+                _reeupConfigUrl: runtimeConfig._reeupConfigUrl,
                 _parentOrigin: runtimeConfig._parentOrigin,
                 _isReeupEmbedded: runtimeConfig._isReeupEmbedded
             });

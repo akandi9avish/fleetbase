@@ -103,26 +103,32 @@ export default class CustomSessionService extends SessionService {
             const apiHost = this.fetch.apiHost;
             const currentOrigin = window.location.origin;
 
-            // Check config flags from runtime-config.js
+            // Check for reeupConfigUrl query param (most reliable indicator)
+            // This is passed from REEUP parent via iframe src URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const reeupConfigUrl = urlParams.get('reeupConfigUrl');
+
+            // Check config flags from runtime-config.js (may include URL param data)
             const isInIframe = config._isInIframe === true;
-            const parentOrigin = config._parentOrigin;
-            const isReeupEmbedded = config._isReeupEmbedded === true;
+            const reeupConfigFromConfig = config._reeupConfigUrl;
+            const parentOrigin = config._parentOrigin || reeupConfigUrl;
+            const isReeupEmbedded = config._isReeupEmbedded === true || !!reeupConfigUrl;
             const allowedOrigins = config.reeup?.allowedOrigins || [];
 
             console.log('[REEUP Session] API Host:', apiHost);
             console.log('[REEUP Session] Current Origin:', currentOrigin);
-            console.log('[REEUP Session] Is in iframe:', isInIframe);
+            console.log('[REEUP Session] reeupConfigUrl param:', reeupConfigUrl);
             console.log('[REEUP Session] Parent origin:', parentOrigin);
             console.log('[REEUP Session] Is REEUP embedded:', isReeupEmbedded);
 
-            // Scenario 1: Same-origin (original check)
+            // Scenario 1: Same-origin (standalone reeup.co)
             if (apiHost && apiHost.startsWith(currentOrigin)) {
                 console.log('[REEUP Session] BFF Mode: TRUE (same-origin)');
                 return true;
             }
 
-            // Scenario 2: Cross-origin REEUP iframe
-            if (isInIframe && isReeupEmbedded && parentOrigin) {
+            // Scenario 2: Cross-origin REEUP iframe (via URL param or referrer)
+            if (parentOrigin && (isInIframe || reeupConfigUrl || reeupConfigFromConfig)) {
                 if (apiHost && apiHost.startsWith(parentOrigin)) {
                     console.log('[REEUP Session] BFF Mode: TRUE (cross-origin iframe)');
                     return true;
