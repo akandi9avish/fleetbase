@@ -1,7 +1,13 @@
-import config from '@fleetbase/console/config/environment';
+import environmentConfig from '@fleetbase/console/config/environment';
+import emberGetConfig from 'ember-get-config';
 import toBoolean from '@fleetbase/ember-core/utils/to-boolean';
 import { set } from '@ember/object';
 import { debug } from '@ember/debug';
+
+// CRITICAL: The fetch service imports config from 'ember-get-config', NOT from
+// '@fleetbase/console/config/environment'. We must update BOTH configs for
+// runtime overrides to take effect properly.
+const config = environmentConfig;
 
 /**
  * REEUP BFF Integration - Iframe Detection
@@ -108,6 +114,8 @@ function coerceValue(key, value) {
 
 /**
  * Apply runtime config overrides based on strict allowlist mapping.
+ * CRITICAL: Updates BOTH environmentConfig AND emberGetConfig because
+ * different parts of the app import config from different sources.
  *
  * @param {Object} rawConfig
  */
@@ -117,7 +125,11 @@ export function applyRuntimeConfig(rawConfig = {}) {
 
         if (configPath) {
             const coercedValue = coerceValue(key, value);
+            // Update environment config (used by session service)
             set(config, configPath, coercedValue);
+            // Update ember-get-config (used by fetch service)
+            set(emberGetConfig, configPath, coercedValue);
+            console.log(`[REEUP Config] Set ${configPath} = ${coercedValue}`);
         } else {
             debug(`[runtime-config] Ignored unknown key: ${key}`);
         }
