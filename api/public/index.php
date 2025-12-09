@@ -32,6 +32,17 @@ define('LARAVEL_START', microtime(true));
 |
 */
 
+// Helper function to safely write to stderr (handles FrankenPHP where STDERR may not exist)
+function safe_stderr_write($msg) {
+    $stderr = defined('STDERR') ? STDERR : @fopen('php://stderr', 'w');
+    if ($stderr) {
+        @fwrite($stderr, $msg);
+        if (!defined('STDERR')) {
+            @fclose($stderr);
+        }
+    }
+}
+
 set_exception_handler(function (\Throwable $e) {
     $msg = sprintf(
         "[FATAL] %s: %s in %s:%d\n%s\n",
@@ -41,7 +52,7 @@ set_exception_handler(function (\Throwable $e) {
         $e->getLine(),
         $e->getTraceAsString()
     );
-    fwrite(STDERR, $msg);
+    safe_stderr_write($msg);
     throw $e; // Re-throw to allow normal handling
 });
 
@@ -50,7 +61,7 @@ set_error_handler(function ($severity, $message, $file, $line) {
         return false;
     }
     $msg = sprintf("[ERROR] %s in %s:%d\n", $message, $file, $line);
-    fwrite(STDERR, $msg);
+    safe_stderr_write($msg);
     throw new \ErrorException($message, 0, $severity, $file, $line);
 });
 
@@ -63,7 +74,7 @@ register_shutdown_function(function () {
             $error['file'],
             $error['line']
         );
-        fwrite(STDERR, $msg);
+        safe_stderr_write($msg);
     }
 });
 

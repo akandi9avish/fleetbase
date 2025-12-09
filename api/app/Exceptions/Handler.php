@@ -44,6 +44,7 @@ class Handler extends ExceptionHandler
     {
         // IMMEDIATE stderr output - bypasses buffering and ensures message appears in logs
         // This fixes the "ERROR unknown error" issue from FrankenPHP
+        // Note: STDERR constant may not be defined in FrankenPHP, use fopen as fallback
         $errorMsg = sprintf(
             "[%s] %s in %s:%d\n",
             get_class($exception),
@@ -51,7 +52,15 @@ class Handler extends ExceptionHandler
             $exception->getFile(),
             $exception->getLine()
         );
-        fwrite(STDERR, $errorMsg);
+
+        // Safely write to stderr - handle FrankenPHP environment where STDERR may not exist
+        $stderr = defined('STDERR') ? STDERR : @fopen('php://stderr', 'w');
+        if ($stderr) {
+            @fwrite($stderr, $errorMsg);
+            if (!defined('STDERR')) {
+                @fclose($stderr);
+            }
+        }
 
         // Record to OTEL first (before any potential early returns)
         $this->recordExceptionToOtel($exception);
