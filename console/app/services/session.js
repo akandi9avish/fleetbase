@@ -36,6 +36,7 @@ export default class CustomSessionService extends SessionService {
     @service currentUser;
     @tracked isBffMode = false;
     @tracked _ephemeralStore = null;
+    @tracked _data = null;  // Stores BFF session data
 
     /**
      * Override the store property to use ephemeral store in BFF mode
@@ -166,57 +167,84 @@ export default class CustomSessionService extends SessionService {
     /**
      * Authenticate via BFF proxy
      * Makes a test API call to verify BFF authentication is working
+     * Uses ember-simple-auth's proper session persistence mechanism
      */
     async authenticateViaBff() {
         try {
             // Make a test API call to verify authentication
             // Use a lightweight endpoint that requires authentication
+            console.log('[REEUP Session] Calling auth/session to verify BFF authentication...');
             const response = await this.fetch.get('auth/session', {}, { namespace: 'int/v1' });
+            console.log('[REEUP Session] auth/session response:', JSON.stringify(response));
 
-            if (response && (response.id || response.user)) {
-                const user = response.user || response;
-                console.log('[REEUP Session] ✓ BFF authentication verified - User:', user.name || user.email || user.id);
+            if (response && response.token) {
+                console.log('[REEUP Session] ✓ BFF authentication verified - Token received');
 
-                // Manually set authenticated state
-                // In BFF mode, we don't need a token in the browser
-                this.set('isAuthenticated', true);
-                this.set('data', {
+                // Build session data structure that ember-simple-auth expects
+                const sessionData = {
                     authenticated: {
-                        user: user,
-                        authenticatedVia: 'bff-proxy',
-                        token: 'bff-managed' // Placeholder - actual token is in BFF server
+                        authenticator: 'authenticator:bff',
+                        token: response.token,
+                        user: response.user,
+                        verified: response.verified,
+                        type: response.type,
+                        authenticatedVia: 'bff-proxy'
                     }
-                });
+                };
 
-                // Try to load current user into service
+                // Use the store's persist method to properly set session state
+                // This triggers ember-simple-auth's internal session setup
+                console.log('[REEUP Session] Persisting session data to store...');
+                await this.store.persist(sessionData);
+
+                // Update the internal data reference for our getter overrides
+                this._data = sessionData;
+
+                console.log('[REEUP Session] ✓ Session data persisted successfully');
+                console.log('[REEUP Session] isAuthenticated check:', this.isAuthenticated);
+
+                // Load the current user - needs to fetch full user details
                 try {
-                    if (this.currentUser && typeof this.currentUser.load === 'function') {
-                        this.currentUser.load(user);
-                    }
+                    console.log('[REEUP Session] Loading current user...');
+                    await this.loadCurrentUser();
+                    console.log('[REEUP Session] ✓ Current user loaded');
                 } catch (userLoadError) {
-                    console.warn('[REEUP Session] Could not load user into currentUser service:', userLoadError);
-                    // Non-fatal - continue anyway
+                    console.warn('[REEUP Session] Could not load current user:', userLoadError);
+                    // Non-fatal - the session is still valid
                 }
 
                 return true;
             } else {
-                throw new Error('Invalid session response from BFF');
+                console.error('[REEUP Session] Invalid response - no token:', response);
+                throw new Error('Invalid session response from BFF - no token received');
             }
         } catch (error) {
-            console.error('[REEUP Session] BFF authentication test failed:', error);
+            console.error('[REEUP Session] BFF authentication failed:', error);
             throw error;
         }
     }
 
     /**
      * Override isAuthenticated getter
-     * In BFF mode, always return true if we've successfully authenticated via BFF
+     * In BFF mode, check our _data for BFF authentication
      */
     get isAuthenticated() {
-        if (this.isBffMode && this.data?.authenticated?.authenticatedVia === 'bff-proxy') {
+        // Check our local _data first (set during BFF auth)
+        if (this.isBffMode && this._data?.authenticated?.authenticatedVia === 'bff-proxy') {
             return true;
         }
         return super.isAuthenticated;
+    }
+
+    /**
+     * Override data getter to return our _data in BFF mode
+     * This ensures other parts of the app can access session data
+     */
+    get data() {
+        if (this.isBffMode && this._data && this._data.authenticated) {
+            return this._data;
+        }
+        return super.data;
     }
 
     /**
@@ -227,8 +255,8 @@ export default class CustomSessionService extends SessionService {
     async invalidate() {
         if (this.isBffMode) {
             console.log('[REEUP Session] BFF mode - clearing local session state');
-            this.set('isAuthenticated', false);
-            this.set('data', {});
+            this._data = {};
+            await this.store.clear();
             // Notify parent REEUP app to handle logout
             if (window.parent !== window) {
                 window.parent.postMessage({ type: 'fleetbase:logout' }, '*');
