@@ -4,6 +4,55 @@ import { set } from '@ember/object';
 import { debug } from '@ember/debug';
 
 /**
+ * REEUP BFF Integration - Iframe Detection
+ * =========================================
+ * When console runs in REEUP iframe, config must be fetched from parent origin
+ * to get the correct API_HOST pointing to BFF proxy.
+ */
+const REEUP_PARENT_ORIGINS = [
+    'https://www.reeup.co',
+    'https://reeup.co',
+    'https://reeup.vercel.app',
+    'https://reeup-forest.vercel.app',
+    'http://localhost:3000',
+];
+
+function isInIframe() {
+    try {
+        return window.self !== window.top;
+    } catch (e) {
+        return true; // Cross-origin iframe
+    }
+}
+
+function getParentOrigin() {
+    if (!isInIframe()) return null;
+    if (document.referrer) {
+        try {
+            return new URL(document.referrer).origin;
+        } catch (e) {}
+    }
+    return null;
+}
+
+function isReeupParent(parentOrigin) {
+    if (!parentOrigin) return false;
+    return REEUP_PARENT_ORIGINS.some(allowed => parentOrigin.startsWith(allowed));
+}
+
+function getConfigUrl() {
+    const timestamp = Date.now();
+    if (isInIframe()) {
+        const parentOrigin = getParentOrigin();
+        if (isReeupParent(parentOrigin)) {
+            console.log('[REEUP Config] Fetching config from REEUP parent:', parentOrigin);
+            return `${parentOrigin}/fleetbase.config.json?_t=${timestamp}`;
+        }
+    }
+    return `/fleetbase.config.json?_t=${timestamp}`;
+}
+
+/**
  * Maps allowed runtime keys to internal config paths.
  */
 const RUNTIME_CONFIG_MAP = {
@@ -71,15 +120,45 @@ export default async function loadRuntimeConfig() {
     }
 
     try {
-        const response = await fetch(`/fleetbase.config.json?_t=${Date.now()}`, { cache: 'no-cache' });
+        const configUrl = getConfigUrl();
+        const response = await fetch(configUrl, {
+            cache: 'no-cache',
+            credentials: 'include'
+        });
+
         if (!response.ok) {
             debug('No fleetbase.config.json found, using built-in config defaults');
             return;
         }
 
         const runtimeConfig = await response.json();
+
+        // Store iframe context for session service
+        if (isInIframe()) {
+            runtimeConfig._isInIframe = true;
+            runtimeConfig._parentOrigin = getParentOrigin();
+            runtimeConfig._isReeupEmbedded = isReeupParent(runtimeConfig._parentOrigin);
+            console.log('[REEUP Config] Iframe context stored:', {
+                _isInIframe: runtimeConfig._isInIframe,
+                _parentOrigin: runtimeConfig._parentOrigin,
+                _isReeupEmbedded: runtimeConfig._isReeupEmbedded
+            });
+        }
+
         applyRuntimeConfig(runtimeConfig);
     } catch (e) {
         debug(`Failed to load runtime config : ${e.message}`);
+        // Fallback to local config if cross-origin fails
+        if (isInIframe()) {
+            console.log('[REEUP Config] Cross-origin fetch failed, trying local config');
+            try {
+                const localResponse = await fetch(`/fleetbase.config.json?_t=${Date.now()}`, { cache: 'no-cache' });
+                if (localResponse.ok) {
+                    applyRuntimeConfig(await localResponse.json());
+                }
+            } catch (localError) {
+                debug(`Failed to load local fallback config: ${localError.message}`);
+            }
+        }
     }
 }

@@ -94,27 +94,51 @@ export default class CustomSessionService extends SessionService {
     /**
      * Detect if running in BFF proxy mode
      * BFF mode is when API_HOST is same-origin (proxied through Next.js)
+     * or when running in a REEUP iframe with cross-origin config
      */
     async detectBffMode() {
         try {
             console.log('[REEUP Session] Detecting BFF mode...');
-            console.log('[REEUP Session] this.fetch:', typeof this.fetch);
 
-            // Check if API_HOST is same-origin
             const apiHost = this.fetch.apiHost;
             const currentOrigin = window.location.origin;
 
-            console.log('[REEUP Session] API Host:', apiHost, '(type:', typeof apiHost, ')');
+            // Check config flags from runtime-config.js
+            const isInIframe = config._isInIframe === true;
+            const parentOrigin = config._parentOrigin;
+            const isReeupEmbedded = config._isReeupEmbedded === true;
+            const allowedOrigins = config.reeup?.allowedOrigins || [];
+
+            console.log('[REEUP Session] API Host:', apiHost);
             console.log('[REEUP Session] Current Origin:', currentOrigin);
+            console.log('[REEUP Session] Is in iframe:', isInIframe);
+            console.log('[REEUP Session] Parent origin:', parentOrigin);
+            console.log('[REEUP Session] Is REEUP embedded:', isReeupEmbedded);
 
-            // If API_HOST starts with current origin, we're in BFF mode
-            const isBff = apiHost && apiHost.startsWith(currentOrigin);
-            console.log('[REEUP Session] BFF Mode Check: apiHost.startsWith(currentOrigin) =', isBff);
+            // Scenario 1: Same-origin (original check)
+            if (apiHost && apiHost.startsWith(currentOrigin)) {
+                console.log('[REEUP Session] BFF Mode: TRUE (same-origin)');
+                return true;
+            }
 
-            return isBff;
+            // Scenario 2: Cross-origin REEUP iframe
+            if (isInIframe && isReeupEmbedded && parentOrigin) {
+                if (apiHost && apiHost.startsWith(parentOrigin)) {
+                    console.log('[REEUP Session] BFF Mode: TRUE (cross-origin iframe)');
+                    return true;
+                }
+            }
+
+            // Scenario 3: API_HOST in allowedOrigins
+            if (apiHost && allowedOrigins.some(origin => apiHost.startsWith(origin))) {
+                console.log('[REEUP Session] BFF Mode: TRUE (allowedOrigins)');
+                return true;
+            }
+
+            console.log('[REEUP Session] BFF Mode: FALSE');
+            return false;
         } catch (error) {
-            console.error('[REEUP Session] ✗ Error detecting BFF mode:', error);
-            console.error('[REEUP Session] Error stack:', error.stack);
+            console.error('[REEUP Session] Error detecting BFF mode:', error);
             return false;
         }
     }
