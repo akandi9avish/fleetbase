@@ -12,6 +12,7 @@ import { debug } from '@ember/debug';
 const REEUP_PARENT_ORIGINS = [
     'https://www.reeup.co',
     'https://reeup.co',
+    'https://console.reeup.co',  // Self for standalone mode
     'https://reeup.vercel.app',
     'https://reeup-forest.vercel.app',
     'http://localhost:3000',
