@@ -4,6 +4,7 @@ namespace Reeup\Integration\Observability\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use OpenTelemetry\API\Globals;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -19,8 +20,18 @@ class TraceRequests
     public function __construct()
     {
         // Only initialize tracer if OpenTelemetry is available
-        if ($this->isOtelAvailable() && app()->bound(\OpenTelemetry\API\Trace\TracerInterface::class)) {
-            $this->tracer = app(\OpenTelemetry\API\Trace\TracerInterface::class);
+        // Use global tracer provider (registered by App\Providers\OpenTelemetryServiceProvider)
+        // instead of container binding to ensure we use the properly configured exporter
+        if ($this->isOtelAvailable()) {
+            try {
+                $this->tracer = Globals::tracerProvider()->getTracer(
+                    env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
+                    '1.0.0'
+                );
+            } catch (\Throwable $e) {
+                // Silently fail - don't break app if OTEL isn't configured
+                $this->tracer = null;
+            }
         }
     }
 

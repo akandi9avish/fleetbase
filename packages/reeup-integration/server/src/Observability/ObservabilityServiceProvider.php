@@ -5,6 +5,7 @@ namespace Reeup\Integration\Observability;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Octane\Events\RequestTerminated;
+use OpenTelemetry\API\Globals;
 
 /**
  * OpenTelemetry Observability Service Provider for REEUP Fleetbase Integration
@@ -40,34 +41,33 @@ class ObservabilityServiceProvider extends ServiceProvider
 
     /**
      * Register the OpenTelemetry tracer provider.
+     *
+     * NOTE: TracerProvider registration is handled by App\Providers\OpenTelemetryServiceProvider
+     * which uses Sdk::buildAndRegisterGlobal(). This provider only handles Octane-specific
+     * event listeners for span flushing.
      */
     public function register(): void
     {
         // Skip registration if OTEL packages aren't installed
         if (!$this->isOtelAvailable()) {
-            Log::debug('[OTEL] OpenTelemetry packages not available - skipping registration');
+            Log::debug('[OTEL/Package] OpenTelemetry packages not available - skipping registration');
             return;
         }
 
-        Log::info('[OTEL] Registering OpenTelemetry service provider');
-
-        $this->app->singleton(\OpenTelemetry\SDK\Trace\TracerProvider::class, function ($app) {
-            return $this->createTracerProvider();
-        });
-
-        $this->app->singleton(\OpenTelemetry\API\Trace\TracerInterface::class, function ($app) {
-            return $this->createTracer();
-        });
+        Log::debug('[OTEL/Package] Package provider registered (TracerProvider handled by App-level provider)');
     }
 
     /**
      * Bootstrap any application services.
+     *
+     * NOTE: TracerProvider is registered globally by App\Providers\OpenTelemetryServiceProvider.
+     * This boot method only registers Octane-specific event listeners for span flushing.
      */
     public function boot(): void
     {
         // Only initialize if OTEL is enabled and available
         if (!$this->isEnabled()) {
-            Log::debug('[OTEL] OpenTelemetry not enabled or not available', [
+            Log::debug('[OTEL/Package] OpenTelemetry not enabled or not available', [
                 'otel_enabled' => env('OTEL_ENABLED', false),
                 'endpoint_set' => !empty(env('OTEL_EXPORTER_OTLP_ENDPOINT')),
                 'packages_available' => $this->isOtelAvailable(),
@@ -75,29 +75,17 @@ class ObservabilityServiceProvider extends ServiceProvider
             return;
         }
 
-        Log::info('[OTEL] Bootstrapping OpenTelemetry', [
-            'service_name' => env('OTEL_SERVICE_NAME', 'reeup-fleetbase'),
-            'endpoint' => env('OTEL_EXPORTER_OTLP_ENDPOINT'),
-        ]);
-
-        // Force-resolve the tracer provider to ensure it's initialized
-        $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
-
         // Register Octane event listener to flush spans after each request
         // This is critical because Octane workers don't terminate between requests
+        // Note: Uses global TracerProvider registered by App-level provider
         if (class_exists(RequestTerminated::class)) {
             $this->app['events']->listen(RequestTerminated::class, function () {
                 $this->flushSpans();
             });
-            Log::info('[OTEL] Registered Octane RequestTerminated listener for span flushing');
+            Log::info('[OTEL/Package] Registered Octane RequestTerminated listener for span flushing');
         }
 
-        // Also register shutdown handler as fallback for non-Octane environments
-        $this->app->terminating(function () {
-            $this->shutdownTracer();
-        });
-
-        Log::info('[OTEL] OpenTelemetry bootstrap complete');
+        Log::debug('[OTEL/Package] Package provider bootstrap complete');
     }
 
     /**
@@ -188,36 +176,37 @@ class ObservabilityServiceProvider extends ServiceProvider
 
     /**
      * Flush pending spans (called after each Octane request).
+     *
+     * Uses the global TracerProvider registered by App\Providers\OpenTelemetryServiceProvider.
      */
     protected function flushSpans(): void
     {
         try {
-            if ($this->app->bound(\OpenTelemetry\SDK\Trace\TracerProvider::class)) {
-                $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
-                if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
-                    $tracerProvider->forceFlush();
-                }
+            $tracerProvider = Globals::tracerProvider();
+            if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
+                $tracerProvider->forceFlush();
             }
         } catch (\Throwable $e) {
-            Log::warning('[OTEL] Failed to flush spans: ' . $e->getMessage());
+            Log::debug('[OTEL/Package] Failed to flush spans: ' . $e->getMessage());
         }
     }
 
     /**
      * Shutdown the tracer provider (called on application termination).
+     *
+     * NOTE: This is typically not needed as App\Providers\OpenTelemetryServiceProvider
+     * uses setAutoShutdown(true) in its Sdk::builder(). Kept for emergency manual shutdown.
      */
     protected function shutdownTracer(): void
     {
         try {
-            if ($this->app->bound(\OpenTelemetry\SDK\Trace\TracerProvider::class)) {
-                $tracerProvider = $this->app->make(\OpenTelemetry\SDK\Trace\TracerProvider::class);
-                if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
-                    $tracerProvider->shutdown();
-                    Log::info('[OTEL] TracerProvider shutdown complete');
-                }
+            $tracerProvider = Globals::tracerProvider();
+            if ($tracerProvider instanceof \OpenTelemetry\SDK\Trace\TracerProvider) {
+                $tracerProvider->shutdown();
+                Log::info('[OTEL/Package] TracerProvider shutdown complete');
             }
         } catch (\Throwable $e) {
-            Log::warning('[OTEL] Failed to shutdown tracer: ' . $e->getMessage());
+            Log::debug('[OTEL/Package] Failed to shutdown tracer: ' . $e->getMessage());
         }
     }
 
