@@ -2,6 +2,7 @@ import { inject as service } from '@ember/service';
 import { tracked } from '@glimmer/tracking';
 import SessionService from '@fleetbase/ember-core/services/session';
 import EphemeralStore from '../session-stores/ephemeral';
+import config from 'ember-get-config';
 
 /**
  * Custom Session Service for REEUP BFF Integration
@@ -100,7 +101,9 @@ export default class CustomSessionService extends SessionService {
         try {
             console.log('[REEUP Session] Detecting BFF mode...');
 
-            const apiHost = this.fetch.apiHost;
+            // Use this.fetch.host (NOT apiHost - that property doesn't exist)
+            // Also check config directly in case fetch service hasn't been updated yet
+            const apiHost = this.fetch.host || config?.API?.host;
             const currentOrigin = window.location.origin;
 
             // Check for reeupConfigUrl query param (most reliable indicator)
@@ -109,17 +112,21 @@ export default class CustomSessionService extends SessionService {
             const reeupConfigUrl = urlParams.get('reeupConfigUrl');
 
             // Check config flags from runtime-config.js (may include URL param data)
-            const isInIframe = config._isInIframe === true;
-            const reeupConfigFromConfig = config._reeupConfigUrl;
-            const parentOrigin = config._parentOrigin || reeupConfigUrl;
-            const isReeupEmbedded = config._isReeupEmbedded === true || !!reeupConfigUrl;
-            const allowedOrigins = config.reeup?.allowedOrigins || [];
+            const isInIframe = config?._isInIframe === true;
+            const reeupConfigFromConfig = config?._reeupConfigUrl;
+            const parentOrigin = config?._parentOrigin || reeupConfigUrl;
+            const isReeupEmbedded = config?._isReeupEmbedded === true || !!reeupConfigUrl;
+            const allowedOrigins = config?.reeup?.allowedOrigins || [];
 
-            console.log('[REEUP Session] API Host:', apiHost);
+            console.log('[REEUP Session] === BFF Detection Debug ===');
+            console.log('[REEUP Session] API Host (fetch.host):', this.fetch.host);
+            console.log('[REEUP Session] API Host (config.API.host):', config?.API?.host);
+            console.log('[REEUP Session] Using API Host:', apiHost);
             console.log('[REEUP Session] Current Origin:', currentOrigin);
             console.log('[REEUP Session] reeupConfigUrl param:', reeupConfigUrl);
             console.log('[REEUP Session] Parent origin:', parentOrigin);
             console.log('[REEUP Session] Is REEUP embedded:', isReeupEmbedded);
+            console.log('[REEUP Session] Is in iframe:', isInIframe);
 
             // Scenario 1: Same-origin (standalone reeup.co)
             if (apiHost && apiHost.startsWith(currentOrigin)) {
@@ -138,6 +145,13 @@ export default class CustomSessionService extends SessionService {
             // Scenario 3: API_HOST in allowedOrigins
             if (apiHost && allowedOrigins.some(origin => apiHost.startsWith(origin))) {
                 console.log('[REEUP Session] BFF Mode: TRUE (allowedOrigins)');
+                return true;
+            }
+
+            // Scenario 4: Same TLD (*.reeup.co) - Console on console.reeup.co, API on www.reeup.co
+            const currentHostname = window.location.hostname;
+            if (apiHost && currentHostname.endsWith('.reeup.co') && apiHost.includes('reeup.co')) {
+                console.log('[REEUP Session] BFF Mode: TRUE (same TLD *.reeup.co)');
                 return true;
             }
 
