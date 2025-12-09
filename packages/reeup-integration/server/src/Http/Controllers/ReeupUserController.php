@@ -107,7 +107,8 @@ class ReeupUserController extends FleetbaseController
                         } else {
                             // Password mismatch - reset the user's password
                             Log::warning("⚠️  [REEUP] Password mismatch for existing user, resetting password");
-                            $existingUser->password = Hash::make($userData['password']);
+                            // Don't call Hash::make() - the User model mutator will hash it
+                            $existingUser->password = $userData['password'];
                             $existingUser->save();
                             $existingUser->refresh();
 
@@ -177,9 +178,14 @@ class ReeupUserController extends FleetbaseController
                 $user->assignSingleRole($roleUuid);
             }
 
+            // Auto-verify REEUP users since they are created programmatically from our backend
+            // This prevents the "not_verified" error for non-admin users
+            $user->email_verified_at = now();
+
             // CRITICAL: Set password AFTER all other operations to prevent it being overwritten
             // Multiple save() calls from setUserType() and assignCompany() can cause password to be lost
-            $user->password = Hash::make($userData['password']);
+            // Don't call Hash::make() - the User model mutator will hash it automatically
+            $user->password = $userData['password'];
             $user->save();
 
             // Verify password was saved by reloading from database
