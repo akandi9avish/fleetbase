@@ -1,7 +1,6 @@
-import Service from '@ember/service';
 import { inject as service } from '@ember/service';
 import { tracked } from '@glimmer/tracking';
-import SessionService from 'ember-simple-auth/services/session';
+import SessionService from '@fleetbase/ember-core/services/session';
 import EphemeralStore from '../session-stores/ephemeral';
 
 /**
