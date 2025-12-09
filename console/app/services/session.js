@@ -209,4 +209,36 @@ export default class CustomSessionService extends SessionService {
         // Normal mode - call parent requireAuthentication
         return super.requireAuthentication(transition, routeOrCallback);
     }
+
+    /**
+     * Check for two-factor authentication
+     * Explicitly forward to parent class to ensure method is available
+     * (fixes potential inheritance issues with Ember service resolution)
+     */
+    checkForTwoFactor(identity) {
+        return this.fetch.get('two-fa/check', { identity }).catch((error) => {
+            throw new Error(error.message);
+        });
+    }
+
+    /**
+     * Load current user - forward to parent
+     */
+    async loadCurrentUser() {
+        return super.loadCurrentUser();
+    }
+
+    /**
+     * Promise current user - forward to parent
+     */
+    async promiseCurrentUser(transition = null) {
+        return super.promiseCurrentUser(transition);
+    }
+
+    /**
+     * Handle authentication - forward to parent
+     */
+    async handleAuthentication() {
+        return super.handleAuthentication();
+    }
 }
