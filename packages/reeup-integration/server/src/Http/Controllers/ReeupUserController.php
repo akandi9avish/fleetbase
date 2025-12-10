@@ -32,6 +32,27 @@ class ReeupUserController extends FleetbaseController
     public $resource = 'user';
 
     /**
+     * Disable automatic CreateUserRequest validation.
+     * We use our own relaxed validation in the create() method.
+     *
+     * @var string|null
+     */
+    public $createRequest = null;
+
+    /**
+     * Constructor - disable automatic FormRequest resolution.
+     * FleetbaseController auto-resolves CreateUserRequest for 'user' resource,
+     * but we need our own relaxed validation for programmatic access.
+     */
+    public function __construct()
+    {
+        // Don't call parent constructor to avoid auto-resolving UserModel and CreateUserRequest
+        // We'll manually handle the User model in our methods
+        $this->resource = 'user';
+        $this->createRequest = null;
+    }
+
+    /**
      * Create a new user with relaxed validation for programmatic access.
      *
      * @param Request $request
@@ -40,8 +61,42 @@ class ReeupUserController extends FleetbaseController
     public function create(Request $request)
     {
         try {
-            // Extract user data from nested payload
+            // DEBUG: Log raw request to diagnose JSON parsing issues
+            Log::info("🔍 [REEUP] Request debug", [
+                'content_type' => $request->header('Content-Type'),
+                'method' => $request->method(),
+                'raw_content_length' => strlen($request->getContent()),
+                'raw_content_preview' => substr($request->getContent(), 0, 500),
+                'all_input' => array_merge($request->all(), [
+                    'password' => isset($request->all()['password']) ? '***MASKED***' : null,
+                    'password_confirmation' => isset($request->all()['password_confirmation']) ? '***MASKED***' : null,
+                ]),
+                'user_input_exists' => $request->has('user'),
+            ]);
+
+            // Extract user data using Fleetbase pattern: nested first, fallback to all, then raw JSON
             $userData = $request->input('user', []);
+
+            if (empty($userData)) {
+                // Fallback 1: Try all input (flat payload)
+                $allInput = $request->all();
+                if (!empty($allInput) && isset($allInput['name'])) {
+                    $userData = $allInput;
+                    Log::info("✅ [REEUP] Using flat payload structure");
+                }
+            }
+
+            if (empty($userData) && $request->getContent()) {
+                // Fallback 2: Try manual JSON parsing (handles Content-Type issues)
+                Log::warning("⚠️  [REEUP] user input empty, trying raw JSON parse");
+                $rawJson = json_decode($request->getContent(), true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $userData = $rawJson['user'] ?? $rawJson;
+                    Log::info("✅ [REEUP] Successfully parsed user data from raw JSON");
+                } else {
+                    Log::error("❌ [REEUP] JSON parse error: " . json_last_error_msg());
+                }
+            }
 
             // Relaxed validation rules (no ExcludedWords, flexible name format)
             // NOTE: Unique constraints removed for email/phone - we handle duplicates gracefully below
