@@ -164,6 +164,11 @@ class ReeupUserController extends FleetbaseController
                             Log::warning("⚠️  [REEUP] Password mismatch for existing user, resetting password");
                             // Don't call Hash::make() - the User model mutator will hash it
                             $existingUser->password = $userData['password'];
+                            // Also ensure email_verified_at is set (required for non-admin login)
+                            if (empty($existingUser->email_verified_at)) {
+                                Log::info("✅ [REEUP] Setting email_verified_at for non-admin user");
+                                $existingUser->email_verified_at = now();
+                            }
                             $existingUser->save();
                             $existingUser->refresh();
 
