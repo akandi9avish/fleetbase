@@ -32,6 +32,15 @@ class ReeupUserController extends FleetbaseController
     public $resource = 'user';
 
     /**
+     * The service which this controller belongs to.
+     * CRITICAL: Required by FleetbaseController - getService() must return a string.
+     * Missing this property causes TypeError when authorization checks call getService().
+     *
+     * @var string
+     */
+    public $service = 'iam';
+
+    /**
      * Disable automatic CreateUserRequest validation.
      * We use our own relaxed validation in the create() method.
      *
@@ -49,6 +58,7 @@ class ReeupUserController extends FleetbaseController
         // Don't call parent constructor to avoid auto-resolving UserModel and CreateUserRequest
         // We'll manually handle the User model in our methods
         $this->resource = 'user';
+        $this->service = 'iam';  // CRITICAL: Required for getService() - prevents TypeError
         $this->createRequest = null;
     }
 
@@ -143,8 +153,19 @@ class ReeupUserController extends FleetbaseController
             if ($existingUser) {
                 Log::info("⚠️  [REEUP] User already exists, returning existing user", [
                     'email' => $userData['email'],
-                    'user_uuid' => $existingUser->uuid
+                    'user_uuid' => $existingUser->uuid,
+                    'email_verified_at' => $existingUser->email_verified_at
                 ]);
+
+                // CRITICAL FIX: ALWAYS ensure email_verified_at is set for existing users
+                // Fleetbase's /int/v1/auth/login rejects non-admin users without email_verified_at
+                // This must be done BEFORE any auth attempts to ensure the user can login via Fleetbase
+                $needsSave = false;
+                if (empty($existingUser->email_verified_at)) {
+                    Log::info("✅ [REEUP] Setting email_verified_at for existing non-admin user (SELF-HEALING)");
+                    $existingUser->email_verified_at = now();
+                    $needsSave = true;
+                }
 
                 // Try to create a token for the existing user
                 $token = null;
@@ -157,6 +178,12 @@ class ReeupUserController extends FleetbaseController
                         ];
 
                         if (auth()->attempt($credentials)) {
+                            // Save email_verified_at if it was updated
+                            if ($needsSave) {
+                                $existingUser->save();
+                                $existingUser->refresh();
+                                Log::info("✅ [REEUP] Saved email_verified_at for existing user");
+                            }
                             $token = auth()->user()->createToken('api-token')->plainTextToken;
                             Log::info("✅ [REEUP] Existing user authenticated successfully");
                         } else {
@@ -164,11 +191,7 @@ class ReeupUserController extends FleetbaseController
                             Log::warning("⚠️  [REEUP] Password mismatch for existing user, resetting password");
                             // Don't call Hash::make() - the User model mutator will hash it
                             $existingUser->password = $userData['password'];
-                            // Also ensure email_verified_at is set (required for non-admin login)
-                            if (empty($existingUser->email_verified_at)) {
-                                Log::info("✅ [REEUP] Setting email_verified_at for non-admin user");
-                                $existingUser->email_verified_at = now();
-                            }
+                            // email_verified_at already set above
                             $existingUser->save();
                             $existingUser->refresh();
 
@@ -182,11 +205,25 @@ class ReeupUserController extends FleetbaseController
                                 Log::error("❌ [REEUP] Authentication still failed after password reset");
                             }
                         }
+                    } else if ($needsSave) {
+                        // No password provided but we still need to save email_verified_at
+                        $existingUser->save();
+                        $existingUser->refresh();
+                        Log::info("✅ [REEUP] Saved email_verified_at (no password update needed)");
                     }
                 } catch (\Exception $e) {
                     Log::warning("⚠️  [REEUP] Could not generate token for existing user", [
                         'error' => $e->getMessage()
                     ]);
+                    // Still try to save email_verified_at even if token generation failed
+                    if ($needsSave) {
+                        try {
+                            $existingUser->save();
+                            Log::info("✅ [REEUP] Saved email_verified_at despite token error");
+                        } catch (\Exception $saveError) {
+                            Log::error("❌ [REEUP] Failed to save email_verified_at", ['error' => $saveError->getMessage()]);
+                        }
+                    }
                 }
 
                 return response()->json([
