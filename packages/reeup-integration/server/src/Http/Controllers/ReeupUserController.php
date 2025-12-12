@@ -186,41 +186,52 @@ class ReeupUserController extends FleetbaseController
                 }
 
                 // Try to create a token for the existing user
+                // CRITICAL FIX: Use Fleetbase's native auth pattern (Hash::check + createToken)
+                // instead of auth()->attempt() which uses session-based auth and doesn't work
+                // properly after password reset within the same request
                 $token = null;
                 try {
                     if (isset($userData['password'])) {
-                        // Attempt login with provided password
-                        $credentials = [
-                            'email' => $userData['email'],
-                            'password' => $userData['password']
-                        ];
+                        // Check password using Fleetbase's native Hash::check method
+                        // This is how AuthController::login() verifies passwords
+                        $passwordMatches = !empty($existingUser->password) &&
+                                          Hash::check($userData['password'], $existingUser->password);
 
-                        if (auth()->attempt($credentials)) {
-                            // Save email_verified_at if it was updated
+                        if ($passwordMatches) {
+                            // Password matches - save email_verified_at if needed and create token
                             if ($needsSave) {
                                 $existingUser->save();
                                 $existingUser->refresh();
                                 Log::info("✅ [REEUP] Saved email_verified_at for existing user");
                             }
-                            $token = auth()->user()->createToken('api-token')->plainTextToken;
-                            Log::info("✅ [REEUP] Existing user authenticated successfully");
+                            // Create token directly on user (like AuthController::login does)
+                            $token = $existingUser->createToken($existingUser->uuid)->plainTextToken;
+                            Log::info("✅ [REEUP] Existing user authenticated successfully via Hash::check");
                         } else {
-                            // Password mismatch - reset the user's password
-                            Log::warning("⚠️  [REEUP] Password mismatch for existing user, resetting password");
-                            // Don't call Hash::make() - the User model mutator will hash it
+                            // Password mismatch OR no password set - reset the user's password
+                            Log::warning("⚠️  [REEUP] Password mismatch or empty for existing user, resetting password");
+
+                            // Set the new password - User model's mutator will hash it
                             $existingUser->password = $userData['password'];
                             // email_verified_at already set above
                             $existingUser->save();
+
+                            // Refresh to get the hashed password from database
                             $existingUser->refresh();
 
-                            Log::info("✅ [REEUP] Password reset complete, attempting authentication");
+                            Log::info("✅ [REEUP] Password reset complete");
 
-                            // Try authentication again with new password
-                            if (auth()->attempt($credentials)) {
-                                $token = auth()->user()->createToken('api-token')->plainTextToken;
-                                Log::info("✅ [REEUP] Authentication successful with new password");
+                            // Verify the password was saved correctly by checking it again
+                            if (!empty($existingUser->password) &&
+                                Hash::check($userData['password'], $existingUser->password)) {
+                                // Create token directly on user (like AuthController::login does)
+                                $token = $existingUser->createToken($existingUser->uuid)->plainTextToken;
+                                Log::info("✅ [REEUP] Token created successfully after password reset");
                             } else {
-                                Log::error("❌ [REEUP] Authentication still failed after password reset");
+                                Log::error("❌ [REEUP] Password verification failed after reset", [
+                                    'password_empty' => empty($existingUser->password),
+                                    'user_uuid' => $existingUser->uuid
+                                ]);
                             }
                         }
                     } else if ($needsSave) {
@@ -231,7 +242,8 @@ class ReeupUserController extends FleetbaseController
                     }
                 } catch (\Exception $e) {
                     Log::warning("⚠️  [REEUP] Could not generate token for existing user", [
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
                     ]);
                     // Still try to save email_verified_at even if token generation failed
                     if ($needsSave) {
