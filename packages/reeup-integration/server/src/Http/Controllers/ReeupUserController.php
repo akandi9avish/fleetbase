@@ -41,6 +41,22 @@ class ReeupUserController extends FleetbaseController
     public $service = 'iam';
 
     /**
+     * The resource singular name (note: Fleetbase has a typo in this property name).
+     * CRITICAL: Required by FleetbaseController - getResourceSingularName() must return a string.
+     *
+     * @var string
+     */
+    public $resourceSingularlName = 'user';
+
+    /**
+     * The resource plural name.
+     * Required by FleetbaseController for resource operations.
+     *
+     * @var string
+     */
+    public $resourcePluralName = 'users';
+
+    /**
      * Disable automatic CreateUserRequest validation.
      * We use our own relaxed validation in the create() method.
      *
@@ -59,6 +75,8 @@ class ReeupUserController extends FleetbaseController
         // We'll manually handle the User model in our methods
         $this->resource = 'user';
         $this->service = 'iam';  // CRITICAL: Required for getService() - prevents TypeError
+        $this->resourceSingularlName = 'user';  // CRITICAL: Required for getResourceSingularName()
+        $this->resourcePluralName = 'users';  // Required for resource operations
         $this->createRequest = null;
     }
 
