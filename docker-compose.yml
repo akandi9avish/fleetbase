@@ -12,7 +12,7 @@ services:
     image: mysql:8.0-oracle
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - "./docker/database/:/docker-entrypoint-initdb.d/"
       - "./docker/database/mysql:/var/lib/mysql"
@@ -34,78 +34,110 @@ services:
       SOCKETCLUSTER_WORKERS: 10
       SOCKETCLUSTER_BROKERS: 10
 
-  scheduler:
-    image: fleetbase/fleetbase-api:latest
-    command: ["go-crond", "--verbose", "root:./crontab"]
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: "mysql://root@database/fleetbase"
-      QUEUE_CONNECTION: redis
-      CACHE_DRIVER: redis
-      CACHE_PATH: /fleetbase/api/storage/framework/cache
-      CACHE_URL: tcp://cache
-      REDIS_URL: tcp://cache
-    depends_on:
-      - database
-      - cache
-
-  queue:
-    image: fleetbase/fleetbase-api:latest
-    command: ["php", "artisan", "queue:work"]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "php", "artisan", "queue:status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    environment:
-      DATABASE_URL: "mysql://root@database/fleetbase"
-      QUEUE_CONNECTION: redis
-      CACHE_DRIVER: redis
-      CACHE_PATH: /fleetbase/api/storage/framework/cache
-      CACHE_URL: tcp://cache
-      REDIS_URL: tcp://cache
-    depends_on:
-        - database
-        - cache
-
-  console:
-    image: fleetbase/fleetbase-console:latest
-    ports:
-      - "4200:4200"
-    volumes:
-      - ./console/fleetbase.config.json:/usr/share/nginx/html/fleetbase.config.json
-
+  # Main Fleetbase API - Built from Railway Dockerfile for production parity
+  # Handles: migrations, seeding, permissions, REEUP role seeding automatically on startup
   application:
-    image: fleetbase/fleetbase-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.railway
+    ports:
+      - "8090:8000"
     volumes:
       - ./api/.env:/fleetbase/api/.env
     environment:
       ENVIRONMENT: development
       DATABASE_URL: "mysql://root@database/fleetbase"
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: fleetbase
+      DB_USERNAME: root
+      DB_PASSWORD: ""
       QUEUE_CONNECTION: redis
       CACHE_DRIVER: redis
       CACHE_PATH: /fleetbase/api/storage/framework/cache
       CACHE_URL: tcp://cache
       REDIS_URL: tcp://cache
+      REDIS_HOST: cache
       SESSION_DOMAIN: localhost
       BROADCAST_DRIVER: socketcluster
+      SOCKETCLUSTER_HOST: socket
+      SOCKETCLUSTER_PORT: 8000
       MAIL_FROM_NAME: Fleetbase
       APP_NAME: Fleetbase
+      APP_URL: http://localhost:8090
       LOG_CHANNEL: daily
       REGISTRY_HOST: https://registry.fleetbase.io
       REGISTRY_PREINSTALLED_EXTENSIONS: 'true'
       OSRM_HOST: https://router.project-osrm.org
     depends_on:
-      - database
-      - cache
-      - queue
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 360s
+      retries: 5
 
-  httpd:
-    build:
-      context: .
-      dockerfile: docker/httpd/Dockerfile
-    ports:
-      - "8000:80"
+  # Queue worker - Depends on application being healthy (ensures migrations ran)
+  queue:
+    image: fleetbase/fleetbase-api:latest
+    command: ["php", "artisan", "queue:work"]
+    restart: unless-stopped
+    volumes:
+      - ./api/.env:/fleetbase/api/.env
+    environment:
+      DATABASE_URL: "mysql://root@database/fleetbase"
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: fleetbase
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      QUEUE_CONNECTION: redis
+      CACHE_DRIVER: redis
+      CACHE_PATH: /fleetbase/api/storage/framework/cache
+      CACHE_URL: tcp://cache
+      REDIS_URL: tcp://cache
+      REDIS_HOST: cache
     depends_on:
-      - application
+      application:
+        condition: service_healthy
+
+  # Scheduler - Depends on application being healthy (ensures migrations ran)
+  scheduler:
+    image: fleetbase/fleetbase-api:latest
+    command: ["go-crond", "--verbose", "root:./crontab"]
+    restart: unless-stopped
+    volumes:
+      - ./api/.env:/fleetbase/api/.env
+    environment:
+      DATABASE_URL: "mysql://root@database/fleetbase"
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: fleetbase
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      QUEUE_CONNECTION: redis
+      CACHE_DRIVER: redis
+      CACHE_PATH: /fleetbase/api/storage/framework/cache
+      CACHE_URL: tcp://cache
+      REDIS_URL: tcp://cache
+      REDIS_HOST: cache
+    depends_on:
+      application:
+        condition: service_healthy
+
+  # Fleetbase Console - Built from local source for REEUP BFF session code
+  console:
+    build:
+      context: ./console
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./console/fleetbase.config.json:/usr/share/nginx/html/fleetbase.config.json
+    depends_on:
+      application:
+        condition: service_healthy

@@ -54,4 +54,4 @@ builds/osx/frankenphp
 *.exe
 *.dll
 *.so
-*.dylib
+*.dylibcerts/

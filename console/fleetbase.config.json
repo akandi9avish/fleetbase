@@ -1,4 +1,4 @@
 {
-    "API_HOST": "https://www.reeup.co",
+    "API_HOST": "http://localhost:8090",
     "API_NAMESPACE": "int/v1"
 }

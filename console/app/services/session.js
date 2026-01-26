@@ -34,6 +34,7 @@ import config from 'ember-get-config';
 export default class CustomSessionService extends SessionService {
     @service fetch;
     @service currentUser;
+    @service router;
     @tracked isBffMode = false;
     @tracked _ephemeralStore = null;
     @tracked _data = null;  // Stores BFF session data
@@ -65,13 +66,68 @@ export default class CustomSessionService extends SessionService {
         console.log('[REEUP Session] Window location:', window.location.href);
         console.log('[REEUP Session] ========================================');
 
-        // Check if we're running in BFF mode FIRST
-        // This must be set before any session operations because it affects the store
-        this.isBffMode = await this.detectBffMode();
+        // CRITICAL: Check for URL token BEFORE super.setup() to prevent redirect race condition
+        // ember-simple-auth's route guards run during/after super.setup(), so we need
+        // to be "authenticated" before then to prevent redirect to /auth
+        const urlToken = this.getUrlToken();
+        if (urlToken) {
+            console.log('[REEUP Session] ✓ Found reeupToken in URL - PRE-AUTHENTICATING before super.setup()');
+
+            // Pre-set BFF mode and session data BEFORE super.setup()
+            this.isBffMode = true;
+
+            // Initialize ephemeral store early
+            if (!this._ephemeralStore) {
+                console.log('[REEUP Session] Creating ephemeral session store (pre-auth)');
+                this._ephemeralStore = EphemeralStore.create();
+            }
+
+            // Pre-populate session data so isAuthenticated returns true
+            this._data = {
+                authenticated: {
+                    authenticator: 'authenticator:bff',
+                    token: urlToken,
+                    verified: true,
+                    type: 'url-token-auth',
+                    authenticatedVia: 'bff-proxy'
+                }
+            };
+
+            // Persist to ephemeral store
+            await this._ephemeralStore.persist(this._data);
+            console.log('[REEUP Session] ✓ Pre-auth complete, isAuthenticated should be true');
+        }
+
+        // Now call parent setup - route guards should see us as authenticated
+        console.log('[REEUP Session] Calling super.setup() to initialize ember-simple-auth...');
+        await super.setup();
+        console.log('[REEUP Session] ✓ ember-simple-auth initialized');
+
+        // If we pre-authenticated with URL token, load user now
+        if (urlToken) {
+            console.log('[REEUP Session] Post-setup: loading current user...');
+            try {
+                await this.loadCurrentUser();
+                console.log('[REEUP Session] ✓✓✓ URL token authentication COMPLETE');
+            } catch (error) {
+                console.warn('[REEUP Session] Could not load user after URL token auth:', error);
+            }
+            return; // Skip other auth methods
+        }
+
+        // Check if we're running in BFF mode (only if not already set by URL token)
+        if (!this.isBffMode) {
+            this.isBffMode = await this.detectBffMode();
+        }
 
         console.log('[REEUP Session] BFF Mode Result:', this.isBffMode);
         console.log('[REEUP Session] Session store type:', this.store.constructor.name);
 
+        // Set up postMessage listener for receiving auth token from parent REEUP app
+        // This is essential for iframe authentication when cookies don't work
+        this.setupPostMessageListener();
+
+        // Try BFF cookie-based authentication
         if (this.isBffMode) {
             console.log('[REEUP Session] ✓ BFF mode CONFIRMED - attempting auto-authentication');
 
@@ -82,15 +138,135 @@ export default class CustomSessionService extends SessionService {
             } catch (error) {
                 console.error('[REEUP Session] ✗✗✗ BFF auto-authentication FAILED:', error);
                 console.error('[REEUP Session] Error stack:', error.stack);
-                // Don't throw - let normal auth flow handle it
+                // Don't throw - postMessage auth may still work
+                console.log('[REEUP Session] Waiting for postMessage auth from parent...');
             }
         } else {
-            console.log('[REEUP Session] Standalone mode - using standard authentication');
-            // Call parent setup for normal authentication flow
-            await super.setup();
+            console.log('[REEUP Session] Standalone mode - standard authentication flow');
         }
 
         console.log('[REEUP Session] Setup complete. isAuthenticated:', this.isAuthenticated);
+    }
+
+    /**
+     * Set up postMessage listener to receive auth token from parent REEUP app
+     * This enables iframe authentication when cross-origin cookies don't work
+     */
+    setupPostMessageListener() {
+        // Only set up listener if we're in an iframe
+        if (window.parent === window) {
+            console.log('[REEUP Session] Not in iframe - skipping postMessage listener');
+            return;
+        }
+
+        console.log('[REEUP Session] Setting up postMessage listener for parent auth...');
+
+        window.addEventListener('message', async (event) => {
+            // Validate message origin (allow reeup.co and local.reeup.co domains)
+            const origin = event.origin;
+            const isValidOrigin = origin.endsWith('.reeup.co') ||
+                                  origin.includes('localhost') ||
+                                  origin.includes('127.0.0.1');
+
+            if (!isValidOrigin) {
+                console.log('[REEUP Session] Ignoring postMessage from untrusted origin:', origin);
+                return;
+            }
+
+            // Check for REEUP auth token message
+            if (event.data?.type === 'reeup:auth-token' && event.data?.token) {
+                console.log('[REEUP Session] ✓ Received auth token via postMessage from:', origin);
+                try {
+                    await this.authenticateWithToken(event.data.token);
+                    console.log('[REEUP Session] ✓✓✓ PostMessage authentication SUCCESSFUL');
+                } catch (error) {
+                    console.error('[REEUP Session] ✗ PostMessage authentication failed:', error);
+                }
+            }
+        });
+
+        console.log('[REEUP Session] ✓ PostMessage listener ready');
+    }
+
+    /**
+     * Get REEUP token from URL query parameter
+     * This is used when the parent app passes the token via URL for iframe auth
+     * (workaround for cross-origin cookie partitioning)
+     */
+    getUrlToken() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('reeupToken');
+            if (token) {
+                console.log('[REEUP Session] Found reeupToken in URL params');
+                // Security: Remove token from URL to prevent it appearing in logs/history
+                // Use replaceState to clean up the URL without reloading
+                const url = new URL(window.location.href);
+                url.searchParams.delete('reeupToken');
+                window.history.replaceState({}, '', url.toString());
+                return token;
+            }
+            return null;
+        } catch (error) {
+            console.error('[REEUP Session] Error reading URL token:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Authenticate using a token received via postMessage
+     * @param {string} token - Fleetbase Sanctum token
+     */
+    async authenticateWithToken(token) {
+        if (!token) {
+            throw new Error('No token provided');
+        }
+
+        console.log('[REEUP Session] Authenticating with provided token...');
+
+        // Build session data structure that ember-simple-auth expects
+        const sessionData = {
+            authenticated: {
+                authenticator: 'authenticator:bff',
+                token: token,
+                verified: true,
+                type: 'postmessage-auth',
+                authenticatedVia: 'bff-proxy'
+            }
+        };
+
+        // Use the store's persist method to properly set session state
+        console.log('[REEUP Session] Persisting postMessage session data to store...');
+        await this.store.persist(sessionData);
+
+        // Update the internal data reference for our getter overrides
+        this._data = sessionData;
+
+        // Enable BFF mode since we're being authenticated from parent
+        this.isBffMode = true;
+
+        console.log('[REEUP Session] ✓ PostMessage session data persisted');
+        console.log('[REEUP Session] isAuthenticated check:', this.isAuthenticated);
+
+        // Load the current user
+        try {
+            console.log('[REEUP Session] Loading current user after postMessage auth...');
+            await this.loadCurrentUser();
+            console.log('[REEUP Session] ✓ Current user loaded');
+        } catch (userLoadError) {
+            console.warn('[REEUP Session] Could not load current user:', userLoadError);
+            // Non-fatal - the session is still valid
+        }
+
+        // Redirect to console dashboard after successful postMessage authentication
+        // This is needed because the app is likely showing the login page
+        try {
+            console.log('[REEUP Session] Redirecting to console dashboard...');
+            await this.router.transitionTo('console');
+            console.log('[REEUP Session] ✓ Redirected to console dashboard');
+        } catch (transitionError) {
+            console.warn('[REEUP Session] Could not redirect to console:', transitionError);
+        }
     }
 
     /**
@@ -149,10 +325,11 @@ export default class CustomSessionService extends SessionService {
                 return true;
             }
 
-            // Scenario 4: Same TLD (*.reeup.co) - Console on console.reeup.co, API on www.reeup.co
+            // Scenario 4: Same TLD (*.reeup.co or *.local.reeup.co) - Console on console.reeup.co, API on www.reeup.co
             const currentHostname = window.location.hostname;
-            if (apiHost && currentHostname.endsWith('.reeup.co') && apiHost.includes('reeup.co')) {
-                console.log('[REEUP Session] BFF Mode: TRUE (same TLD *.reeup.co)');
+            const isReeupTLD = currentHostname.endsWith('.reeup.co') || currentHostname.endsWith('.local.reeup.co');
+            if (apiHost && isReeupTLD && apiHost.includes('reeup.co')) {
+                console.log('[REEUP Session] BFF Mode: TRUE (same TLD *.reeup.co or *.local.reeup.co)');
                 return true;
             }
 
@@ -172,9 +349,28 @@ export default class CustomSessionService extends SessionService {
     async authenticateViaBff() {
         try {
             // Make a test API call to verify authentication
-            // Use a lightweight endpoint that requires authentication
+            // IMPORTANT: Use native fetch with credentials: 'include' to send cookies
+            // The Ember fetch service doesn't send credentials for cross-origin requests
             console.log('[REEUP Session] Calling auth/session to verify BFF authentication...');
-            const response = await this.fetch.get('auth/session', {}, { namespace: 'int/v1' });
+
+            const apiHost = this.fetch.host || config?.API?.host;
+            const authUrl = `${apiHost}/int/v1/auth/session`;
+            console.log('[REEUP Session] Fetching from:', authUrl);
+
+            const fetchResponse = await fetch(authUrl, {
+                method: 'GET',
+                credentials: 'include',  // CRITICAL: Send cookies for cross-origin BFF auth
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!fetchResponse.ok) {
+                throw new Error(`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`);
+            }
+
+            const response = await fetchResponse.json();
             console.log('[REEUP Session] auth/session response:', JSON.stringify(response));
 
             if (response && response.token) {

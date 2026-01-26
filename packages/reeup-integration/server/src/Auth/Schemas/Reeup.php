@@ -114,6 +114,17 @@ class Reeup
                 'list delivery',
             ],
         ],
+        [
+            'name'        => 'ReeupLabOperations',
+            'description' => 'Policy for testing laboratory operations with sample delivery tracking.',
+            'permissions' => [
+                'see extension',
+                'view-delivery-dashboard',
+                'track-deliveries',
+                'view delivery',
+                'list delivery',
+            ],
+        ],
     ];
 
     /**
@@ -184,6 +195,18 @@ class Reeup
                 'see extension',
                 'view-delivery-dashboard',
                 'manage-orders',
+                'track-deliveries',
+            ],
+        ],
+        [
+            'name'        => 'Reeup Lab Facility',
+            'description' => 'Role for testing laboratory operators. Can track sample deliveries and view test results.',
+            'policies'    => [
+                'ReeupLabOperations',
+            ],
+            'permissions' => [
+                'see extension',
+                'view-delivery-dashboard',
                 'track-deliveries',
             ],
         ],
