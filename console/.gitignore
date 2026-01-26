@@ -26,4 +26,10 @@
 
 # broccoli-debug
 /DEBUG/
+
+# Vercel deployment
 .vercel
+
+# Auto-generated extension files
+/app/extensions/
+/app/utils/extension-loaders.js

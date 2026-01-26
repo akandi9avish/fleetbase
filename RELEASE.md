@@ -1,21 +1,24 @@
-# 🚀 Fleetbase v0.7.15 — 2025-11-01
+# 🚀 Fleetbase v0.7.26 — 2025-01-16
 
-> "Optimization tune-up, prevent queue blockage"
+> "Improved Driver Validation + API improvements"
 
 ---
 
 ## ✨ Highlights
-- Create surgical optimziations around metadata option data, as well as order methods to prevent trigger lifecycle jobs.
-- Updated order `setDistanceAndTime` to prevent lifecycle job triggers, order estimation tracking limited to orders within past 2 days instead of month, now runs every 10 minutes instead of 5 minutes.
+- Improved driver creation validation for internal API
+- Vehicle and Driver API use explicit `::create` method now
+- Improved onboarding orchestrator framework and services for history and resume capability
+- Upgraded Stripe SDK to v17
 
 ---
 
 ## ⚠️ Breaking Changes
-- None
+- None 🙂
 
 ---
 
 ## 🔧 Upgrade Steps
+
 ```bash
 # Pull latest version
 git pull origin main --no-rebase
@@ -28,5 +31,7 @@ docker compose down && docker compose up -d
 docker compose exec application bash -c "./deploy.sh"
 ```
 
+---
+
 ## Need help? 
-Join the discussion on [GitHub Discussions](https://github.com/fleetbase/fleetbase/discussions) or drop by [#fleetbase on Discord](https://discord.com/invite/HnTqQ6zAVn)
+Join the discussion on [GitHub Discussions](https://github.com/fleetbase/ember-ui/discussions) or drop by [#fleetbase on Discord](https://discord.com/invite/HnTqQ6zAVn)

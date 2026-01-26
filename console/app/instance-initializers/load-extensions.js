@@ -1,13 +1,16 @@
-export function initialize(application) {
-    const universe = application.lookup('service:universe');
-    if (universe) {
-        universe.createRegistries(['@fleetbase/console', 'auth:login']);
-        try {
-            universe.bootEngines(application);
-        } catch (error) {
-            console.warn('[LOAD EXTENSIONS] Failed to boot engines - this is OK if no extensions are installed:', error);
-            // Continue loading - extensions are optional
-        }
+/**
+ * Load extensions from the API using ExtensionManager
+ * This must run before other initializers that depend on extensions
+ */
+export async function initialize(appInstance) {
+    const application = appInstance.application;
+    const extensionManager = appInstance.lookup('service:universe/extension-manager');
+
+    try {
+        await extensionManager.loadExtensions(application);
+    } catch (error) {
+        console.warn('[load-extensions] Failed to load extensions - this is OK if no extensions are installed:', error);
+        // Continue loading - extensions are optional
     }
 }
 
