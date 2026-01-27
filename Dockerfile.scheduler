@@ -105,7 +105,7 @@ RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoload
 COPY --chown=www-data:www-data ./api /fleetbase/api
 
 # Dump optimized autoloader
-RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative"
+RUN su www-data -s /bin/sh -c "composer dumpautoload --optimize --classmap-authoritative --ignore-platform-req=php"
 
 # Copy crontab
 COPY docker/crontab ./crontab
