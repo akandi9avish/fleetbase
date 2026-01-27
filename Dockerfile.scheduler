@@ -99,7 +99,7 @@ COPY --chown=www-data:www-data ./packages /fleetbase/packages
 COPY --chown=www-data:www-data ./api/composer.json ./api/composer.lock /fleetbase/api/
 
 # Install Composer dependencies (lock file includes all OTEL packages)
-RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache"
+RUN su www-data -s /bin/sh -c "composer install --no-scripts --optimize-autoloader --no-dev --no-cache --ignore-platform-req=php"
 
 # Copy application code
 COPY --chown=www-data:www-data ./api /fleetbase/api
