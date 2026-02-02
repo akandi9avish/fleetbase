@@ -353,6 +353,78 @@ class ReeupUserController extends FleetbaseController
     }
 
     /**
+     * Update a user's IAM role.
+     *
+     * Called by REEUP backend when user switches entities to update
+     * Fleetbase permissions to match the new entity type.
+     *
+     * Endpoint: PATCH /int/v1/reeup/users/{id}/role
+     *
+     * @param Request $request
+     * @param string $id User UUID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateRole(Request $request, string $id)
+    {
+        try {
+            $user = User::where('uuid', $id)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'errors' => ['user' => ['User not found']]
+                ], 404);
+            }
+
+            // Verify user belongs to the same company as the authenticated admin
+            $companyUuid = session('company');
+            if ($companyUuid && $user->company_uuid !== $companyUuid) {
+                return response()->json([
+                    'errors' => ['user' => ['User not in your company']]
+                ], 403);
+            }
+
+            $roleUuid = $request->input('role_uuid');
+            if (!$roleUuid) {
+                return response()->json([
+                    'errors' => ['role_uuid' => ['role_uuid is required']]
+                ], 400);
+            }
+
+            // Verify role exists
+            $role = \Fleetbase\Models\Role::where('uuid', $roleUuid)->first();
+            if (!$role) {
+                return response()->json([
+                    'errors' => ['role_uuid' => ['Role not found']]
+                ], 404);
+            }
+
+            // Assign the new role (replaces existing role)
+            $user->assignSingleRole($roleUuid);
+
+            Log::info("✅ [REEUP] Updated user role", [
+                'user_uuid' => $id,
+                'new_role' => $role->name,
+                'role_uuid' => $roleUuid,
+            ]);
+
+            return response()->json([
+                'user' => $user,
+                'role' => $role->name,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("❌ [REEUP] Failed to update user role", [
+                'user_uuid' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'errors' => ['server' => [$e->getMessage()]]
+            ], 500);
+        }
+    }
+
+    /**
      * Query users (standard Fleetbase query).
      *
      * @param Request $request

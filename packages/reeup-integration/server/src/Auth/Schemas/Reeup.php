@@ -190,12 +190,16 @@ class Reeup
             'policies'    => [
                 'ReeupRetailOperations',
                 'ReeupCultivationOperations',
+                'ReeupProcessingOperations',
+                'ReeupDistributionOperations',
             ],
             'permissions' => [
                 'see extension',
                 'view-delivery-dashboard',
                 'manage-orders',
                 'track-deliveries',
+                'manage-drivers',
+                'manage-vehicles',
             ],
         ],
         [

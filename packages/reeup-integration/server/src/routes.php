@@ -20,6 +20,7 @@ Route::prefix('int/v1/reeup')->namespace('Reeup\Integration\Http\Controllers')->
     $router->middleware(['fleetbase.protected', 'Reeup\Integration\Http\Middleware\InjectCompanyContext'])->group(function () use ($router) {
         // User management endpoints
         $router->post('users', 'ReeupUserController@create');
+        $router->patch('users/{id}/role', 'ReeupUserController@updateRole');
         $router->get('users', 'ReeupUserController@query');
         $router->get('users/{id}', 'ReeupUserController@find');
     });
