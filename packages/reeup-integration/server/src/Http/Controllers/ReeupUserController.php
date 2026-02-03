@@ -391,7 +391,8 @@ class ReeupUserController extends FleetbaseController
             }
 
             // Verify role exists
-            $role = \Fleetbase\Models\Role::where('uuid', $roleUuid)->first();
+            // Note: Fleetbase Role model uses 'id' as the UUID column (HasUuid trait with $uuidColumn = 'id')
+            $role = \Fleetbase\Models\Role::where('id', $roleUuid)->first();
             if (!$role) {
                 return response()->json([
                     'errors' => ['role_uuid' => ['Role not found']]
