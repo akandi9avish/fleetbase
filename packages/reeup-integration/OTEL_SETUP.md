@@ -40,7 +40,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://openobserve.railway.internal:5080
 
 # OpenObserve configuration
 OPENOBSERVE_ORGANIZATION=reeup
-OPENOBSERVE_AUTH_TOKEN=YXZpc2hAcmVldXAuY286YTZteWRuZjkzdzl3YWQ4eHhleGY4b2ZnYWtodXlnNG8=
+OPENOBSERVE_AUTH_TOKEN=[OPENOBSERVE_AUTH_TOKEN - set via Railway env var]
 OPENOBSERVE_STREAM_NAME=fleetbase_traces
 ```
 
