@@ -1,12 +1,15 @@
 /* eslint-env node */
 'use strict';
 
+// eslint-disable-next-line n/no-extraneous-require
 const fg = require('fast-glob');
 const fs = require('fs');
 const path = require('path');
+// eslint-disable-next-line n/no-extraneous-require
 const recast = require('recast');
 const babelParser = require('recast/parsers/babel');
 const builders = recast.types.builders;
+// eslint-disable-next-line n/no-extraneous-require
 const chokidar = require('chokidar');
 
 module.exports = {
@@ -35,7 +38,7 @@ module.exports = {
 `;
     },
 
-    included(app) {
+    included() {
         this._super.included.apply(this, arguments);
 
         console.log('\n' + '/'.repeat(70));

@@ -1,3 +1,4 @@
+/* eslint-disable ember/no-private-routing-service */
 import { debug } from '@ember/debug';
 /**
  * Fleetbase Router Refresh Bug Fix Utility
@@ -36,8 +37,6 @@ export function patchRouterRefresh(application) {
             debug('[Fleetbase Router Patch] Already applied, skipping');
             return;
         }
-
-        const originalRefresh = router._routerMicrolib.refresh.bind(router._routerMicrolib);
 
         router._routerMicrolib.refresh = function (pivotRoute) {
             const previousTransition = this.activeTransition;

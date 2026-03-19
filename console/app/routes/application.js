@@ -2,7 +2,6 @@ import Route from '@ember/routing/route';
 import { tracked } from '@glimmer/tracking';
 import { inject as service } from '@ember/service';
 import { action } from '@ember/object';
-import config from '../config/environment';
 import isElectron from '@fleetbase/ember-core/utils/is-electron';
 import pathToRoute from '@fleetbase/ember-core/utils/path-to-route';
 import removeBootLoader from '../utils/remove-boot-loader';

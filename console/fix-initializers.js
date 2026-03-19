@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 
 /**
  * Fix FleetOps Engine Instance Initializers
@@ -10,20 +11,17 @@
 const fs = require('fs');
 const path = require('path');
 
-const FLEETOPS_ENGINE_PATH = path.join(
-    __dirname,
-    'node_modules/@fleetbase/fleetops-engine/addon/instance-initializers'
-);
+const FLEETOPS_ENGINE_PATH = path.join(__dirname, 'node_modules/@fleetbase/fleetops-engine/addon/instance-initializers');
 
 const fixes = [
     {
         file: 'register-leaflet-tracking-marker.js',
-        name: 'register-leaflet-tracking-marker'
+        name: 'register-leaflet-tracking-marker',
     },
     {
         file: 'register-leaflet-draw-control-layer.js',
-        name: 'register-leaflet-draw-control-layer'
-    }
+        name: 'register-leaflet-draw-control-layer',
+    },
 ];
 
 console.log('[fix-initializers] Fixing FleetOps engine instance initializers...');

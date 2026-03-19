@@ -18,7 +18,7 @@ const config = environmentConfig;
 const REEUP_PARENT_ORIGINS = [
     'https://www.reeup.co',
     'https://reeup.co',
-    'https://console.reeup.co',  // Self for standalone mode
+    'https://console.reeup.co', // Self for standalone mode
     'https://reeup.vercel.app',
     'https://reeup-forest.vercel.app',
     'http://localhost:3000',
@@ -37,14 +37,16 @@ function getParentOrigin() {
     if (document.referrer) {
         try {
             return new URL(document.referrer).origin;
-        } catch (e) {}
+        } catch (e) {
+            debug('[REEUP Config] Failed to parse document.referrer origin');
+        }
     }
     return null;
 }
 
 function isReeupParent(parentOrigin) {
     if (!parentOrigin) return false;
-    return REEUP_PARENT_ORIGINS.some(allowed => parentOrigin.startsWith(allowed));
+    return REEUP_PARENT_ORIGINS.some((allowed) => parentOrigin.startsWith(allowed));
 }
 
 function getConfigUrl() {
@@ -247,7 +249,7 @@ export default async function loadRuntimeConfig() {
         const configUrl = getConfigUrl();
         const response = await fetch(configUrl, {
             cache: 'no-cache',
-            credentials: 'include'
+            credentials: 'include',
         });
 
         if (!response.ok) {
@@ -274,7 +276,7 @@ export default async function loadRuntimeConfig() {
                 _isInIframe: runtimeConfig._isInIframe,
                 _reeupConfigUrl: runtimeConfig._reeupConfigUrl,
                 _parentOrigin: runtimeConfig._parentOrigin,
-                _isReeupEmbedded: runtimeConfig._isReeupEmbedded
+                _isReeupEmbedded: runtimeConfig._isReeupEmbedded,
             });
         }
 

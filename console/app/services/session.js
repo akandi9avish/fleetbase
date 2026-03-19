@@ -37,7 +37,7 @@ export default class CustomSessionService extends SessionService {
     @service router;
     @tracked isBffMode = false;
     @tracked _ephemeralStore = null;
-    @tracked _data = null;  // Stores BFF session data
+    @tracked _data = null; // Stores BFF session data
 
     /**
      * Override the store property to use ephemeral store in BFF mode
@@ -89,8 +89,8 @@ export default class CustomSessionService extends SessionService {
                     token: urlToken,
                     verified: true,
                     type: 'url-token-auth',
-                    authenticatedVia: 'bff-proxy'
-                }
+                    authenticatedVia: 'bff-proxy',
+                },
             };
 
             // Persist to ephemeral store
@@ -164,9 +164,7 @@ export default class CustomSessionService extends SessionService {
         window.addEventListener('message', async (event) => {
             // Validate message origin (allow reeup.co and local.reeup.co domains)
             const origin = event.origin;
-            const isValidOrigin = origin.endsWith('.reeup.co') ||
-                                  origin.includes('localhost') ||
-                                  origin.includes('127.0.0.1');
+            const isValidOrigin = origin.endsWith('.reeup.co') || origin.includes('localhost') || origin.includes('127.0.0.1');
 
             if (!isValidOrigin) {
                 console.log('[REEUP Session] Ignoring postMessage from untrusted origin:', origin);
@@ -231,8 +229,8 @@ export default class CustomSessionService extends SessionService {
                 token: token,
                 verified: true,
                 type: 'postmessage-auth',
-                authenticatedVia: 'bff-proxy'
-            }
+                authenticatedVia: 'bff-proxy',
+            },
         };
 
         // Use the store's persist method to properly set session state
@@ -320,7 +318,7 @@ export default class CustomSessionService extends SessionService {
             }
 
             // Scenario 3: API_HOST in allowedOrigins
-            if (apiHost && allowedOrigins.some(origin => apiHost.startsWith(origin))) {
+            if (apiHost && allowedOrigins.some((origin) => apiHost.startsWith(origin))) {
                 console.log('[REEUP Session] BFF Mode: TRUE (allowedOrigins)');
                 return true;
             }
@@ -359,11 +357,11 @@ export default class CustomSessionService extends SessionService {
 
             const fetchResponse = await fetch(authUrl, {
                 method: 'GET',
-                credentials: 'include',  // CRITICAL: Send cookies for cross-origin BFF auth
+                credentials: 'include', // CRITICAL: Send cookies for cross-origin BFF auth
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                    Accept: 'application/json',
+                },
             });
 
             if (!fetchResponse.ok) {
@@ -384,8 +382,8 @@ export default class CustomSessionService extends SessionService {
                         user: response.user,
                         verified: response.verified,
                         type: response.type,
-                        authenticatedVia: 'bff-proxy'
-                    }
+                        authenticatedVia: 'bff-proxy',
+                    },
                 };
 
                 // Use the store's persist method to properly set session state

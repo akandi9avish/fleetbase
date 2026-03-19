@@ -28,5 +28,5 @@ export function initialize(application) {
 
 export default {
     name: 'register-custom-session',
-    initialize
+    initialize,
 };

@@ -53,7 +53,7 @@ export default class OnboardingContextService extends Service {
         // Filter out sensitive fields
         const sensitiveFields = ['password', 'password_confirmation'];
         const filteredData = {};
-        
+
         for (const [key, value] of Object.entries(data)) {
             if (!sensitiveFields.includes(key)) {
                 filteredData[key] = value;

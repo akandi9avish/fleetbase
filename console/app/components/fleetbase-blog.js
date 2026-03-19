@@ -35,7 +35,7 @@ export default class FleetbaseBlogComponent extends Component {
                     this.localCache.set('fleetbase-blog-data-expiration', add(new Date(), { hours: 6 }));
                 }
             } catch (err) {
-                debug('Failed to load blog: ' + err.message);
+                console.debug('Failed to load blog: ' + err.message);
             }
         }
     }

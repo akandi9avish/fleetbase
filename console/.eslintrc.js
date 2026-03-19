@@ -48,6 +48,12 @@ module.exports = {
                 ],
             },
         ],
+        'n/no-extraneous-require': [
+            'error',
+            {
+                allowModules: ['fast-glob', 'recast', 'chokidar'],
+            },
+        ],
         'no-prototype-builtins': 'off',
     },
     overrides: [

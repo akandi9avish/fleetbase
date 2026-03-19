@@ -50,5 +50,5 @@ export function initialize(appInstance) {
 
 export default {
     name: 'refresh-fetch-host',
-    initialize
+    initialize,
 };

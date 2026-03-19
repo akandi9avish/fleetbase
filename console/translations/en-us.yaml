@@ -20,6 +20,7 @@ common:
   cancel: Cancel
   confirm: Confirm
   close: Close
+  close-and-save: Close and Save
   open: Open
   view: View
   preview: Preview
@@ -146,6 +147,7 @@ common:
   password: Password
   confirm-password: Confirm Password
   email: Email
+  phone: Phone
   username: Username
   remember-me: Remember Me
   welcome: Welcome
