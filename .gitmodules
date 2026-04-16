@@ -42,3 +42,6 @@
 [submodule "packages/ledger"]
 	path = packages/ledger
 	url = git@github.com:fleetbase/ledger.git
+[submodule "packages/fleetops-temp"]
+	path = packages/fleetops-temp
+	url = https://github.com/fleetbase/fleetops.git
